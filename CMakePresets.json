@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "configurePresets": [
+    {
+      "name": "windows-vs2026",
+      "displayName": "Windows - Visual Studio 2026",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    {
+      "name": "ninja",
+      "displayName": "Ninja",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "MinSizeRel"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-vs2026",
+      "configurePreset": "windows-vs2026",
+      "configuration": "MinSizeRel"
+    },
+    {
+      "name": "ninja",
+      "configurePreset": "ninja"
+    }
+  ]
+}

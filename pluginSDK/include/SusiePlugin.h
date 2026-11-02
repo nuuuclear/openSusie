@@ -1,0 +1,209 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+
+#if defined(_WIN32) || defined(_WIN64)
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif
+    #include <windows.h>
+    #define SUSIE_EXPORT extern "C" __declspec(dllexport)
+#else
+    #include <cstdlib>
+    #include <cstddef>
+
+    using BYTE = std::uint8_t;
+    using WORD = std::uint16_t;
+    using DWORD = std::uint32_t;
+    using DWORD_PTR = std::uintptr_t;
+    using HANDLE = void*;
+    using HLOCAL = void*;
+    using LPSTR = char*;
+    using LPCSTR = const char*;
+    using LPWSTR = wchar_t*;
+    using LPCWSTR = const wchar_t*;
+
+    #ifndef WINAPI
+        #define WINAPI
+    #endif
+    #ifndef CALLBACK
+        #define CALLBACK
+    #endif
+
+    #define LMEM_MOVEABLE 0x0002
+    #define SUSIE_EXPORT extern "C" __attribute__((visibility("default")))
+
+    namespace susie_detail {
+    struct LocalBlock {
+        std::size_t size;
+        alignas(std::max_align_t) unsigned char data[1];
+    };
+    }
+
+    inline HLOCAL LocalAlloc(unsigned int, std::size_t size) {
+        if (size > static_cast<std::size_t>(-1) - offsetof(susie_detail::LocalBlock, data)) {
+            return nullptr;
+        }
+
+        auto* block = static_cast<susie_detail::LocalBlock*>(
+            std::malloc(offsetof(susie_detail::LocalBlock, data) + size)
+        );
+        if (!block) return nullptr;
+
+        block->size = size;
+        return block->data;
+    }
+
+    inline void* LocalLock(HLOCAL handle) {
+        return handle;
+    }
+
+    inline int LocalUnlock(HLOCAL) {
+        return 1;
+    }
+
+    inline std::size_t LocalSize(HLOCAL handle) {
+        if (!handle) return 0;
+        const auto* data = static_cast<const unsigned char*>(handle);
+        const auto* block = reinterpret_cast<const susie_detail::LocalBlock*>(
+            data - offsetof(susie_detail::LocalBlock, data)
+        );
+        return block->size;
+    }
+
+    inline HLOCAL LocalFree(HLOCAL handle) {
+        if (handle) {
+            auto* data = static_cast<unsigned char*>(handle);
+            std::free(data - offsetof(susie_detail::LocalBlock, data));
+        }
+        return nullptr;
+    }
+#endif
+
+inline constexpr int SPI_NO_FUNCTION = -1;
+inline constexpr int SPI_ALL_RIGHT = 0;
+inline constexpr int SPI_ABORT = 1;
+inline constexpr int SPI_NOT_SUPPORT = 2;
+inline constexpr int SPI_OUT_OF_ORDER = 3;
+inline constexpr int SPI_NO_MEMORY = 4;
+inline constexpr int SPI_MEMORY_ERROR = 5;
+inline constexpr int SPI_FILE_READ_ERROR = 6;
+inline constexpr int SPI_WINDOW_ERROR = 7;
+inline constexpr int SPI_OTHER_ERROR = 8;
+inline constexpr int SPI_FILE_WRITE_ERROR = 9;
+inline constexpr int SPI_END_OF_FILE = 10;
+
+inline constexpr unsigned int SPI_INPUT_FILE = 0;
+inline constexpr unsigned int SPI_INPUT_MEMORY = 1;
+inline constexpr unsigned int SPI_IGNORE_CASE = 1u << 7;
+inline constexpr unsigned int SPI_OUTPUT_FILE = 0;
+inline constexpr unsigned int SPI_OUTPUT_MEMORY = 1u << 8;
+
+using SusieProgressCallback = int (CALLBACK*)(int, int, std::intptr_t);
+
+class SusieLocalLock {
+public:
+    explicit SusieLocalLock(HLOCAL handle) : handle_(handle), data_(handle ? LocalLock(handle) : nullptr) {}
+    ~SusieLocalLock() {
+        if (data_) LocalUnlock(handle_);
+    }
+
+    SusieLocalLock(const SusieLocalLock&) = delete;
+    SusieLocalLock& operator=(const SusieLocalLock&) = delete;
+
+    void* get() const {
+        return data_;
+    }
+
+private:
+    HLOCAL handle_;
+    void* data_;
+};
+
+#pragma pack(push, 1)
+struct SusiePictureInfo {
+    std::int32_t left;
+    std::int32_t top;
+    std::int32_t width;
+    std::int32_t height;
+    WORD x_density;
+    WORD y_density;
+    std::int16_t colorDepth;
+    HLOCAL hInfo;
+};
+#pragma pack(pop)
+
+struct SusieBitmapInfoHeader {
+    std::uint32_t size;
+    std::int32_t width;
+    std::int32_t height;
+    WORD planes;
+    WORD bitCount;
+    std::uint32_t compression;
+    std::uint32_t sizeImage;
+    std::int32_t xPelsPerMeter;
+    std::int32_t yPelsPerMeter;
+    std::uint32_t colorsUsed;
+    std::uint32_t colorsImportant;
+};
+static_assert(sizeof(SusieBitmapInfoHeader) == 40);
+
+inline constexpr std::uint32_t SUSIE_BI_RGB = 0;
+inline constexpr std::uint32_t SUSIE_BI_RLE8 = 1;
+inline constexpr std::uint32_t SUSIE_BI_RLE4 = 2;
+inline constexpr std::uint32_t SUSIE_BI_BITFIELDS = 3;
+inline constexpr std::uint32_t SUSIE_BI_JPEG = 4;
+inline constexpr std::uint32_t SUSIE_BI_PNG = 5;
+inline constexpr std::uint32_t SUSIE_BI_ALPHABITFIELDS = 6;
+
+using SusieGetPluginInfoFunc = int (WINAPI*)(int, LPSTR, int);
+using SusieGetPluginInfoWFunc = int (WINAPI*)(int, LPWSTR, int);
+using SusieIsSupportedFunc = int (WINAPI*)(LPCSTR, DWORD_PTR);
+using SusieIsSupportedWFunc = int (WINAPI*)(LPCWSTR, DWORD_PTR);
+using SusieGetPictureInfoFunc = int (WINAPI*)(LPCSTR, std::size_t, unsigned int, SusiePictureInfo*);
+using SusieGetPictureInfoWFunc = int (WINAPI*)(LPCWSTR, std::size_t, unsigned int, SusiePictureInfo*);
+using SusieGetPictureFunc = int (WINAPI*)(
+    LPCSTR,
+    std::size_t,
+    unsigned int,
+    HANDLE*,
+    HANDLE*,
+    SusieProgressCallback,
+    std::intptr_t
+);
+using SusieGetPictureWFunc = int (WINAPI*)(
+    LPCWSTR,
+    std::size_t,
+    unsigned int,
+    HANDLE*,
+    HANDLE*,
+    SusieProgressCallback,
+    std::intptr_t
+);
+
+inline constexpr std::uint32_t SUSIE_ANIMATION_API_VERSION = 1;
+
+using SusieGetAnimationApiVersionFunc = std::uint32_t (WINAPI*)();
+using SusieOpenAnimationFunc = int (WINAPI*)(
+    LPCSTR,
+    DWORD_PTR,
+    HANDLE*,
+    std::uint32_t*,
+    std::uint32_t*
+);
+using SusieOpenAnimationWFunc = int (WINAPI*)(
+    LPCWSTR,
+    DWORD_PTR,
+    HANDLE*,
+    std::uint32_t*,
+    std::uint32_t*
+);
+using SusieGetAnimationFrameFunc = int (WINAPI*)(
+    HANDLE,
+    std::uint32_t,
+    HANDLE*,
+    HANDLE*,
+    std::uint32_t*
+);
+using SusieCloseAnimationFunc = void (WINAPI*)(HANDLE);

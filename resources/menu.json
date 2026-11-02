@@ -1,0 +1,122 @@
+{
+  "items": [
+    {
+      "label": "Open Image",
+      "action": "open"
+    },
+    {
+      "label": "Open Recent",
+      "action": "recent"
+    },
+    {
+      "type": "separator"
+    },
+    {
+      "label": "Close Image",
+      "action": "close"
+    },
+    {
+      "label": "Rotate left",
+      "action": "rotate_left"
+    },
+    {
+      "label": "Rotate right",
+      "action": "rotate_right"
+    },
+    {
+      "label": "Bigger",
+      "action": "zoom_in"
+    },
+    {
+      "label": "Smaller",
+      "action": "zoom_out"
+    },
+    {
+      "label": "Fit to canvas",
+      "action": "fit"
+    },
+    {
+      "label": "Image Information",
+      "action": "information"
+    },
+    {
+      "type": "separator"
+    },
+    {
+      "label": "Settings",
+      "items": [
+        {
+          "label": "Interpolation",
+          "items": [
+            {
+              "label": "Nearest",
+              "action": "interpolation.nearest",
+              "type": "radio"
+            },
+            {
+              "label": "Linear",
+              "action": "interpolation.linear",
+              "type": "radio"
+            }
+          ]
+        },
+        {
+          "label": "Background",
+          "items": [
+            {
+              "label": "Dark",
+              "action": "background.dark",
+              "type": "radio"
+            },
+            {
+              "label": "Light",
+              "action": "background.light",
+              "type": "radio"
+            },
+            {
+              "label": "Checkerboard",
+              "action": "background.checkerboard",
+              "type": "radio"
+            }
+          ]
+        },
+        {
+          "label": "Zoom to cursor",
+          "action": "toggle.zoom_to_cursor",
+          "type": "checkbox"
+        },
+        {
+          "label": "Reset zoom on open",
+          "action": "toggle.reset_zoom_on_open",
+          "type": "checkbox"
+        },
+        {
+          "label": "Toolbar side",
+          "items": [
+            {
+              "label": "Left",
+              "action": "toolbar.left",
+              "type": "radio"
+            },
+            {
+              "label": "Right",
+              "action": "toolbar.right",
+              "type": "radio"
+            }
+          ]
+        },
+        {
+          "label": "Image decoder",
+          "action": "decoder.preferences"
+        }
+      ]
+    },
+    {
+      "type": "separator"
+    },
+    {
+      "label": "Quit",
+      "action": "quit"
+    }
+  ]
+}

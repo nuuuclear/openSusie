@@ -1,0 +1,5 @@
+EXPORTS
+    OpenSusieGetAnimationApiVersion=_OpenSusieGetAnimationApiVersion@0
+    OpenSusieOpenAnimation=_OpenSusieOpenAnimation@20
+    OpenSusieGetAnimationFrame=_OpenSusieGetAnimationFrame@20
+    OpenSusieCloseAnimation=_OpenSusieCloseAnimation@4
