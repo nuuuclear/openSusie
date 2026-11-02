@@ -12,6 +12,9 @@ _deps
 CMakeUserPresets.json
 CRemakingConf.json
 
+.vs/
+.vscode/
+
 build/
 build-*/
 out/
