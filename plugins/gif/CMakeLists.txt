@@ -1,10 +1,3 @@
-cmake_minimum_required(VERSION 3.10)
-
-project(openSusie_gif_plugin)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 add_library(giflib STATIC
     external/giflib/dgif_lib.c
     external/giflib/egif_lib.c
@@ -30,8 +23,6 @@ target_link_libraries(openSusie_gif PRIVATE
     giflib
 )
 
-# install
-
 set_target_properties(openSusie_gif PROPERTIES
     PREFIX ""
     RUNTIME_OUTPUT_DIRECTORY "${openSusie_plugin_output_directory}"
@@ -40,7 +31,6 @@ set_target_properties(openSusie_gif PROPERTIES
 )
 
 install(TARGETS openSusie_gif
-    RUNTIME DESTINATION plugins
-    LIBRARY DESTINATION plugins
-    # ARCHIVE DESTINATION plugins
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}/plugins"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_BINDIR}/plugins"
 )

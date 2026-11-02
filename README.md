@@ -26,6 +26,13 @@ cmake --preset windows-vs2026
 cmake --build --preset windows-vs2026
 ```
 
+Installing:
+
+```bash
+cmake --install build/ninja --prefix ./dist
+cmake --install build/windows-vs2026 --config MinSizeRel --prefix ./dist
+```
+
 ## Dependencies
 
 - SDL3

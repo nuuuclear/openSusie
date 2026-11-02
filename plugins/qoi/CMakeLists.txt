@@ -1,10 +1,3 @@
-cmake_minimum_required(VERSION 3.10)
-
-project(openSusie_qoi_plugin)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 add_library(qoi INTERFACE)
 target_include_directories(qoi INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/qoi"
@@ -28,7 +21,6 @@ set_target_properties(openSusie_qoi PROPERTIES
 )
 
 install(TARGETS openSusie_qoi
-    RUNTIME DESTINATION plugins
-    LIBRARY DESTINATION plugins
-    # ARCHIVE DESTINATION plugins
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}/plugins"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_BINDIR}/plugins"
 )
