@@ -12,22 +12,35 @@ constexpr int ButtonOffsetY = ToolbarTitleBarHeight;
 }
 
 ButtonsWindow::ButtonsWindow(App* app, Viewer* imageViewer, NativeMenu* nativeMenu)
-    : Subroutine(app),
-      viewer(imageViewer),
-      menu(nativeMenu) {
+:   Subroutine(app),
+    viewer(imageViewer),
+    menu(nativeMenu
+) {
     const auto path = app->getFileSystem().resolve(Paths::Resources, "buttons.bmp");
     SDL_Surface* surface = SDL_LoadBMP(path.string().c_str());
     if (!surface) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load buttons.bmp: %s", SDL_GetError());
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Could not load button icons: %s",
+            SDL_GetError()
+        );
         return;
     }
 
     if (!SDL_SetSurfaceColorKey(surface, true, SDL_MapSurfaceRGB(surface, 0, 0, 0))) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not set button sprite transparency: %s", SDL_GetError());
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Could not set button sprite transparency: %s",
+            SDL_GetError()
+        );
     } else {
         buttonTexture = SDL_CreateTextureFromSurface(app->ui().toolbarRenderer(), surface);
         if (!buttonTexture) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create button sprite texture: %s", SDL_GetError());
+            SDL_LogError(
+                SDL_LOG_CATEGORY_APPLICATION,
+                "Could not create button sprite texture: %s",
+                SDL_GetError()
+            );
         }
     }
 
@@ -47,9 +60,11 @@ void ButtonsWindow::event(const SDL_Event& event) {
         case UI::Action::Close:
             app->quit();
             return;
+
         case UI::Action::ShowMenu:
             menu->show(app->ui().toolbarWindow(), titlebarX, titlebarY);
             return;
+
         case UI::Action::Minimize:
         case UI::Action::ToggleMaximize:
         case UI::Action::None:
@@ -57,7 +72,8 @@ void ButtonsWindow::event(const SDL_Event& event) {
     }
 
     if (event.type == SDL_EVENT_WINDOW_MOUSE_LEAVE
-    &&  event.window.windowID == buttonsWindowID) {
+    &&  event.window.windowID == buttonsWindowID
+    ) {
         for (bool& hover : hovering) {
             hover = false;
         }
@@ -65,26 +81,31 @@ void ButtonsWindow::event(const SDL_Event& event) {
     }
 
     if (event.type == SDL_EVENT_MOUSE_MOTION
-    &&  event.motion.windowID == buttonsWindowID) {
+    &&  event.motion.windowID == buttonsWindowID
+    ) {
         for (size_t i = 0; i < buttonCount; ++i) {
-            hovering[i] = event.motion.x >= 0
-                && event.motion.x < buttonWidth
-                && event.motion.y >= ButtonOffsetY + ButtonY[i]
-                && event.motion.y < ButtonOffsetY + ButtonY[i] + ButtonHeights[i];
+            hovering[i] 
+            =   event.motion.x >= 0
+            &&  event.motion.x < buttonWidth
+            &&  event.motion.y >= ButtonOffsetY + ButtonY[i]
+            &&  event.motion.y < ButtonOffsetY + ButtonY[i] + ButtonHeights[i];
         }
+
         return;
     }
 
     if (event.type == SDL_EVENT_MOUSE_BUTTON_UP
     &&  event.button.windowID == buttonsWindowID
-    &&  event.button.button == SDL_BUTTON_LEFT) {
+    &&  event.button.button == SDL_BUTTON_LEFT
+    ) {
         const float x = event.button.x;
         const float y = event.button.y;
 
         for (size_t i = 0; i < buttonCount; ++i) {
             if (x >= 0 && x < buttonWidth
             &&  y >= ButtonOffsetY + ButtonY[i]
-            &&  y < ButtonOffsetY + ButtonY[i] + ButtonHeights[i]) {
+            &&  y < ButtonOffsetY + ButtonY[i] + ButtonHeights[i]
+            ) {
                 activateButton(i);
                 return;
             }

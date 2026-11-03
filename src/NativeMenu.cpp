@@ -14,39 +14,56 @@
 #include "Viewer.h"
 
 namespace {
-bool checkedAction(
-    const std::string& action,
-    const Viewer::Settings& settings,
-    const Viewer& viewer
-) {
+bool checkedAction(const std::string& action, const Viewer::Settings& settings, const Viewer& viewer) {
     if (action == "interpolation.nearest") {
         return settings.interpolation == Viewer::Interpolation::Nearest;
     }
+
     if (action == "interpolation.linear") {
         return settings.interpolation == Viewer::Interpolation::Linear;
     }
+
     if (action == "background.dark") {
         return settings.background == Viewer::Background::Dark;
     }
+
     if (action == "background.light") {
         return settings.background == Viewer::Background::Light;
     }
+
     if (action == "background.checkerboard") {
         return settings.background == Viewer::Background::Checkerboard;
     }
-    if (action == "toggle.zoom_to_cursor") return settings.zoomToCursor;
-    if (action == "toggle.reset_zoom_on_open") return settings.resetZoomOnOpen;
-    if (action == "toolbar.left") return !settings.toolbarOnRight;
-    if (action == "toolbar.right") return settings.toolbarOnRight;
+
+    if (action == "toggle.zoom_to_cursor") {
+        return settings.zoomToCursor;
+    }
+
+    if (action == "toggle.reset_zoom_on_open") {
+        return settings.resetZoomOnOpen;
+    }
+
+    if (action == "toolbar.left") {
+        return !settings.toolbarOnRight;
+    }
+
+    if (action == "toolbar.right") {
+        return settings.toolbarOnRight;
+    }
+
     constexpr char decoderPrefix[] = "decoder.select:";
     if (action.rfind(decoderPrefix, 0) == 0) {
         const std::string selection = action.substr(sizeof(decoderPrefix) - 1);
+        
         const size_t separator = selection.find(':');
         if (separator == std::string::npos) return false;
+
         const std::string extension = selection.substr(0, separator);
         const std::string pluginId = selection.substr(separator + 1);
+
         return viewer.decoderPreference(extension) == pluginId;
     }
+
     return false;
 }
 
@@ -115,21 +132,27 @@ void NativeMenu::loadItems() {
                     if (!type.empty() && type != "radio" && type != "checkbox") {
                         throw std::runtime_error("unsupported menu entry type '" + type + "'");
                     }
+
                     if (item.label.empty()) {
                         throw std::runtime_error("menu entry labels must not be empty");
                     }
+
                     if (entry.contains("items")) {
                         item.children = parseItems(entry.at("items"));
                     }
+
                     if (item.action.empty() && item.children.empty()) {
                         throw std::runtime_error("menu entries need an action or child items");
                     }
+
                     if (!item.action.empty() && !item.children.empty()) {
                         throw std::runtime_error("menu entries cannot have both an action and child items");
                     }
+
                     if ((type == "radio" || type == "checkbox") && item.action.empty()) {
                         throw std::runtime_error("checkable menu entries need an action");
                     }
+
                     item.radio = type == "radio";
                     item.checkable = item.radio || type == "checkbox";
                 }
@@ -151,6 +174,7 @@ void NativeMenu::loadItems() {
             error.what()
         );
     }
+
     SDL_free(fileData);
 }
 
@@ -158,7 +182,7 @@ void NativeMenu::show(SDL_Window* parent, int x, int y) {
     if (!parent) {
         SDL_LogError(
             SDL_LOG_CATEGORY_APPLICATION,
-            "Could not display the native menu without a parent window"
+            "Can not display menu without a parent window"
         );
         return;
     }
@@ -186,16 +210,15 @@ void NativeMenu::show(SDL_Window* parent, int x, int y) {
     }
 }
 
-std::optional<std::size_t> NativeMenu::chooseOption(
-    const std::vector<std::string>& labels
-) {
+std::optional<std::size_t> NativeMenu::chooseOption(const std::vector<std::string>& labels) {
     if (labels.empty()) return std::nullopt;
     SDL_Window* parent = app->ui().toolbarWindow();
     if (!parent) {
         SDL_LogError(
             SDL_LOG_CATEGORY_APPLICATION,
-            "Could not display the decoder menu without a parent window"
+            "Can not display menu without a parent window"
         );
+
         return std::nullopt;
     }
 
@@ -217,7 +240,8 @@ std::optional<std::size_t> NativeMenu::chooseOption(
             [&selected](int command) {
                 if (command > 0) selected = static_cast<std::size_t>(command - 1);
             }
-        )) {
+        )
+    ) {
         SDL_LogError(
             SDL_LOG_CATEGORY_APPLICATION,
             "Could not display the decoder selection menu"
@@ -268,10 +292,13 @@ std::vector<NativeMenuItem> NativeMenu::buildItems() {
                 item.command = static_cast<int>(commandActions.size() + 1);
                 commandActions.push_back(item.action);
             }
+            
             result.push_back(std::move(item));
         }
+
         return result;
     };
+
     return build(menuItems);
 }
 
@@ -318,6 +345,7 @@ std::vector<NativeMenuItem> NativeMenu::buildDecoderPreferences() {
         unavailable.enabled = false;
         extensions.push_back(std::move(unavailable));
     }
+
     return extensions;
 }
 
@@ -325,7 +353,7 @@ void NativeMenu::activate(int id) {
     if (id <= 0 || static_cast<size_t>(id) > commandActions.size()) {
         SDL_LogError(
             SDL_LOG_CATEGORY_APPLICATION,
-            "Unsupported native menu command %d",
+            "Unsupported menu command %d",
             id
         );
         return;
@@ -344,10 +372,12 @@ void NativeMenu::activate(int id) {
             );
             return;
         }
+
         viewer->setDecoderPreference(
             selection.substr(0, separator),
             selection.substr(separator + 1)
         );
+
         return;
     }
 
@@ -356,45 +386,64 @@ void NativeMenu::activate(int id) {
         if (index < recentFiles.size()) {
             viewer->present(recentFiles[index]);
         }
+
         return;
     }
 
     if (action == "open") {
-            viewer->openFileDialog();
+        viewer->openFileDialog();
+
     } else if (action == "close") {
-            viewer->closeImage();
+        viewer->closeImage();
+
     } else if (action == "rotate_left") {
-            viewer->rotateLeft();
+        viewer->rotateLeft();
+
     } else if (action == "rotate_right") {
-            viewer->rotateRight();
+        viewer->rotateRight();
+
     } else if (action == "zoom_in") {
-            viewer->zoomIn();
+        viewer->zoomIn();
+
     } else if (action == "zoom_out") {
-            viewer->zoomOut();
+        viewer->zoomOut();
+
     } else if (action == "information") {
-            viewer->showInformation();
+        viewer->showInformation();
+
     } else if (action == "fit") {
-            viewer->fitToWindow();
+        viewer->fitToWindow();
+
     } else if (action == "quit") {
-            app->quit();
+        app->quit();
+
     } else if (action == "interpolation.nearest") {
-            viewer->setInterpolation(Viewer::Interpolation::Nearest);
+        viewer->setInterpolation(Viewer::Interpolation::Nearest);
+
     } else if (action == "interpolation.linear") {
-            viewer->setInterpolation(Viewer::Interpolation::Linear);
+        viewer->setInterpolation(Viewer::Interpolation::Linear);
+
     } else if (action == "background.dark") {
-            viewer->setBackground(Viewer::Background::Dark);
+        viewer->setBackground(Viewer::Background::Dark);
+
     } else if (action == "background.light") {
-            viewer->setBackground(Viewer::Background::Light);
+        viewer->setBackground(Viewer::Background::Light);
+
     } else if (action == "background.checkerboard") {
-            viewer->setBackground(Viewer::Background::Checkerboard);
+        viewer->setBackground(Viewer::Background::Checkerboard);
+
     } else if (action == "toggle.zoom_to_cursor") {
-            viewer->setZoomToCursor(!viewer->settings().zoomToCursor);
+        viewer->setZoomToCursor(!viewer->settings().zoomToCursor);
+
     } else if (action == "toggle.reset_zoom_on_open") {
-            viewer->setResetZoomOnOpen(!viewer->settings().resetZoomOnOpen);
+        viewer->setResetZoomOnOpen(!viewer->settings().resetZoomOnOpen);
+
     } else if (action == "toolbar.left") {
-            viewer->setToolbarOnRight(false);
+        viewer->setToolbarOnRight(false);
+
     } else if (action == "toolbar.right") {
-            viewer->setToolbarOnRight(true);
+        viewer->setToolbarOnRight(true);
+        
     } else {
         SDL_LogError(
             SDL_LOG_CATEGORY_APPLICATION,

@@ -18,16 +18,21 @@ struct SusieDecodedImage {
 };
 
 inline int SusieWritePluginInfo(int index, char* buffer, int bufferLength, const char* const* values, int valueCount) {
-    if (!buffer || bufferLength <= 0 || !values || index < 0 || index >= valueCount) {
-        return 0;
-    }
-
+    if (!buffer
+    ||  bufferLength <= 0
+    ||  !values
+    ||  index < 0
+    ||  index >= valueCount
+    ) return 0;
+    
     const std::size_t length = std::min(
         std::strlen(values[index]),
         static_cast<std::size_t>(bufferLength - 1)
     );
+
     std::memcpy(buffer, values[index], length);
     buffer[length] = '\0';
+
     return 1;
 }
 
@@ -47,10 +52,12 @@ inline bool SusieWriteRgbaDib(
     if (static_cast<std::size_t>(width) > std::numeric_limits<std::size_t>::max() / 4) {
         return false;
     }
+
     const std::size_t rowBytes = static_cast<std::size_t>(width) * 4;
     if (rowBytes > std::numeric_limits<std::size_t>::max() / static_cast<std::size_t>(height)) {
         return false;
     }
+
     const std::size_t imageBytes = rowBytes * static_cast<std::size_t>(height);
     if (imageBytes > std::numeric_limits<std::uint32_t>::max()) return false;
 
@@ -88,6 +95,7 @@ inline bool SusieWriteRgbaDib(
         0x000000ff,
         0xff000000
     };
+
     std::memcpy(
         reinterpret_cast<std::uint8_t*>(header) + sizeof(SusieBitmapInfoHeader),
         channelMasks,
@@ -109,6 +117,7 @@ inline bool SusieWriteRgbaDib(
     LocalUnlock(infoHandle);
     *bitmapInfo = infoHandle;
     *bitmapData = dataHandle;
+
     return true;
 }
 
@@ -123,6 +132,7 @@ inline bool SusieHasFileExtension(const char* filename, const std::vector<std::s
             extensionStart = cursor;
         }
     }
+
     if (!extensionStart) return false;
 
     const std::size_t length = std::strlen(extensionStart);
@@ -136,6 +146,7 @@ inline bool SusieHasFileExtension(const char* filename, const std::vector<std::s
                 break;
             }
         }
+
         if (matches) return true;
     }
 
@@ -155,6 +166,7 @@ inline void SusieReleasePicture(HANDLE* bitmapInfo, HANDLE* bitmapData) {
         LocalFree(*bitmapInfo);
         *bitmapInfo = nullptr;
     }
+
     if (bitmapData && *bitmapData) {
         LocalFree(*bitmapData);
         *bitmapData = nullptr;
@@ -190,30 +202,44 @@ inline bool SusieConvertDibToRgba(
 
         SusieBitmapInfoHeader header{};
         std::memcpy(&header, info, sizeof(header));
-        if (header.size < sizeof(SusieBitmapInfoHeader) || header.size > infoSize) break;
-        if (header.width <= 0 || header.height == 0
-            || header.height == std::numeric_limits<std::int32_t>::min()
-            || header.planes != 1) {
+
+        if (header.size < sizeof(SusieBitmapInfoHeader) 
+        ||  header.size > infoSize
+        ) break;
+
+        if (header.width <= 0
+        ||  header.height == 0
+        ||  header.height == std::numeric_limits<std::int32_t>::min()
+        ||  header.planes != 1
+        ) {
             break;
         }
 
         const int imageWidth = header.width;
         const int imageHeight = header.height < 0 ? -header.height : header.height;
         const unsigned int bitCount = header.bitCount;
-        if (bitCount != 1 && bitCount != 4 && bitCount != 8
-            && bitCount != 16 && bitCount != 24 && bitCount != 32) {
-            break;
-        }
+
+        if (bitCount != 1
+        &&  bitCount != 4
+        &&  bitCount != 8
+        &&  bitCount != 16
+        &&  bitCount != 24
+        &&  bitCount != 32
+        ) break;
+        
         if (header.compression != SUSIE_BI_RGB
-            && header.compression != SUSIE_BI_BITFIELDS
-            && header.compression != SUSIE_BI_ALPHABITFIELDS) {
-            break;
-        }
-        if ((header.compression == SUSIE_BI_BITFIELDS
-                || header.compression == SUSIE_BI_ALPHABITFIELDS)
-            && bitCount != 16 && bitCount != 32) {
-            break;
-        }
+        &&  header.compression != SUSIE_BI_BITFIELDS
+        &&  header.compression != SUSIE_BI_ALPHABITFIELDS
+        ) break;
+        
+        if (
+            (   header.compression == SUSIE_BI_BITFIELDS
+            ||  header.compression == SUSIE_BI_ALPHABITFIELDS
+            ) 
+        &&  bitCount != 16 
+        &&  bitCount != 32
+        ) break;
+
 
         const std::uint64_t rowBits = static_cast<std::uint64_t>(imageWidth) * bitCount;
         const std::uint64_t stride64 = ((rowBits + 31) / 32) * 4;
@@ -221,11 +247,18 @@ inline bool SusieConvertDibToRgba(
                 / static_cast<std::uint64_t>(imageHeight)) {
             break;
         }
-        const std::uint64_t inputBytes64 = stride64 * static_cast<std::uint64_t>(imageHeight);
-        const std::uint64_t pixelsCount64 = static_cast<std::uint64_t>(imageWidth)
-            * static_cast<std::uint64_t>(imageHeight);
+
+        const std::uint64_t inputBytes64
+        =   stride64
+        *   static_cast<std::uint64_t>(imageHeight);
+
+        const std::uint64_t pixelsCount64 
+        =   static_cast<std::uint64_t>(imageWidth)
+        *   static_cast<std::uint64_t>(imageHeight);
+
         if (pixelsCount64 > std::numeric_limits<std::uint64_t>::max() / 4) break;
         const std::uint64_t outputBytes64 = pixelsCount64 * 4;
+
         if (stride64 > std::numeric_limits<std::size_t>::max()
         ||  inputBytes64 > std::numeric_limits<std::size_t>::max()
         ||  outputBytes64 > std::numeric_limits<std::size_t>::max()
@@ -235,19 +268,23 @@ inline bool SusieConvertDibToRgba(
 
         const std::size_t stride = static_cast<std::size_t>(stride64);
         const std::size_t inputBytes = static_cast<std::size_t>(inputBytes64);
-        if (dataSize && inputBytes > dataSize) break;
-        if (header.sizeImage && header.sizeImage < inputBytes) break;
+
+        if (dataSize && inputBytes > dataSize)
+            break;
+        if (header.sizeImage && header.sizeImage < inputBytes)
+            break;
 
         std::size_t extraMaskBytes = 0;
         std::uint32_t redMask = 0;
         std::uint32_t greenMask = 0;
         std::uint32_t blueMask = 0;
         std::uint32_t alphaMask = 0;
+
         if (header.compression == SUSIE_BI_BITFIELDS
         ||  header.compression == SUSIE_BI_ALPHABITFIELDS
         ) {
-            const std::size_t maskCount =
-                header.compression == SUSIE_BI_ALPHABITFIELDS ? 4 : 3;
+            const std::size_t maskCount = header.compression == SUSIE_BI_ALPHABITFIELDS ? 4 : 3;
+
             if (header.size >= 52) {
                 std::memcpy(&redMask, info + 40, sizeof(redMask));
                 std::memcpy(&greenMask, info + 44, sizeof(greenMask));
@@ -255,6 +292,7 @@ inline bool SusieConvertDibToRgba(
                 if (header.size >= 56) {
                     std::memcpy(&alphaMask, info + 52, sizeof(alphaMask));
                 }
+
             } else {
                 extraMaskBytes = maskCount * sizeof(std::uint32_t);
                 if (header.size + extraMaskBytes > infoSize) break;
@@ -265,6 +303,7 @@ inline bool SusieConvertDibToRgba(
                     std::memcpy(&alphaMask, info + header.size + 12, sizeof(alphaMask));
                 }
             }
+
             if (!redMask || !greenMask || !blueMask) break;
         } else if (bitCount == 16) {
             redMask = 0x7c00;
@@ -307,6 +346,7 @@ inline bool SusieConvertDibToRgba(
 
                 if (bitCount <= 8) {
                     unsigned int index = 0;
+
                     if (bitCount == 8) {
                         index = row[x];
                     } else if (bitCount == 4) {
@@ -315,6 +355,7 @@ inline bool SusieConvertDibToRgba(
                     } else {
                         index = (row[x / 8] >> (7 - (x & 7))) & 1;
                     }
+
                     if (index >= paletteCount) {
                         rgba.clear();
                         break;
@@ -323,6 +364,7 @@ inline bool SusieConvertDibToRgba(
                     blue = color[0];
                     green = color[1];
                     red = color[2];
+
                 } else if (bitCount == 24) {
                     blue = row[3 * x + 0];
                     green = row[3 * x + 1];
@@ -350,13 +392,13 @@ inline bool SusieConvertDibToRgba(
                     }
                 }
 
-                const std::size_t destination =
-                    (static_cast<std::size_t>(y) * imageWidth + x) * 4;
+                const std::size_t destination = (static_cast<std::size_t>(y) * imageWidth + x) * 4;
                 rgba[destination + 0] = red;
                 rgba[destination + 1] = green;
                 rgba[destination + 2] = blue;
                 rgba[destination + 3] = alpha;
             }
+            
             if (rgba.empty()) break;
         }
 

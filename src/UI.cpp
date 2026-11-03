@@ -24,10 +24,17 @@ bool UI::initialize(const std::string& title, int viewerWidth, int viewerHeight,
         viewerHeight,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_BORDERLESS
     );
+
     if (!viewer.window) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create viewer window: %s", SDL_GetError());
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Could not create viewer window: %s",
+            SDL_GetError()
+        );
+
         return false;
     }
+
     if (!SDL_SetWindowHitTest(viewer.window, UI::viewerHitTest, nullptr)) {
         SDL_LogWarn(
             SDL_LOG_CATEGORY_APPLICATION,
@@ -44,8 +51,14 @@ bool UI::initialize(const std::string& title, int viewerWidth, int viewerHeight,
         ToolbarTitleBarHeight + 184,
         SDL_WINDOW_BORDERLESS | SDL_WINDOW_UTILITY
     );
+
     if (!toolbar.window) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create toolbar window: %s", SDL_GetError());
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Could not create toolbar window: %s",
+            SDL_GetError()
+        );
+
         shutdown();
         return false;
     }
@@ -53,7 +66,11 @@ bool UI::initialize(const std::string& title, int viewerWidth, int viewerHeight,
     const auto iconPath = files.resolve(Paths::Resources, "icon.bmp");
     SDL_Surface* icon = SDL_LoadBMP(iconPath.string().c_str());
     if (!icon) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load application icon: %s", SDL_GetError());
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Could not load application icon: %s",
+            SDL_GetError()
+        );
     } else {
         SDL_SetWindowIcon(viewer.window, icon);
         SDL_SetWindowIcon(toolbar.window, icon);
@@ -62,13 +79,24 @@ bool UI::initialize(const std::string& title, int viewerWidth, int viewerHeight,
 
     viewer.renderer = SDL_CreateRenderer(viewer.window, nullptr);
     if (!viewer.renderer) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create viewer renderer: %s", SDL_GetError());
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Could not create viewer renderer: %s",
+            SDL_GetError()
+        );
+
         shutdown();
         return false;
     }
+    
     toolbar.renderer = SDL_CreateRenderer(toolbar.window, nullptr);
     if (!toolbar.renderer) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create toolbar renderer: %s", SDL_GetError());
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Could not create toolbar renderer: %s",
+            SDL_GetError()
+        );
+
         shutdown();
         return false;
     }
@@ -78,14 +106,17 @@ bool UI::initialize(const std::string& title, int viewerWidth, int viewerHeight,
         viewer.renderer,
         files.resolve(Paths::Resources, "close.bmp").string()
     );
+
     viewer.minimizeTexture = loadButtonTexture(
         viewer.renderer,
         files.resolve(Paths::Resources, "minimize.bmp").string()
     );
+
     viewer.maximizeTexture = loadButtonTexture(
         viewer.renderer,
         files.resolve(Paths::Resources, "full.bmp").string()
     );
+
     toolbar.closeTexture = loadButtonTexture(
         toolbar.renderer,
         files.resolve(Paths::Resources, "close.bmp").string()
@@ -93,12 +124,16 @@ bool UI::initialize(const std::string& title, int viewerWidth, int viewerHeight,
 
     SDL_SetWindowPosition(toolbar.window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
     SDL_GetWindowPosition(toolbar.window, &toolbarX, &toolbarY);
+
     int toolbarWidth = 0;
     SDL_GetWindowSize(toolbar.window, &toolbarWidth, nullptr);
+
     viewerX = toolbarX + toolbarWidth;
     viewerY = toolbarY;
     SDL_SetWindowPosition(viewer.window, viewerX, viewerY);
+
     windowPositionsInitialized = true;
+
     return true;
 }
 
@@ -146,14 +181,17 @@ void UI::handleEvent(const SDL_Event& event) {
                 if (windowsSnapped) {
                     int toolbarWidth = 0;
                     SDL_GetWindowSize(toolbar.window, &toolbarWidth, nullptr);
+
                     int viewerWidth = 0;
                     SDL_GetWindowSize(viewer.window, &viewerWidth, nullptr);
+
                     toolbarX = toolbarOnRight
                         ? viewerX + viewerWidth
                         : viewerX - toolbarWidth;
                     toolbarY = viewerY;
                     setWindowPositionIfChanged(toolbar.window, toolbarX, toolbarY);
                 }
+
                 ensureToolbarVisible();
                 setToolbarAlwaysOnTop(SDL_GetKeyboardFocus() == viewer.window);
             }
@@ -167,12 +205,14 @@ void UI::handleEvent(const SDL_Event& event) {
                 ensureToolbarVisible();
                 setToolbarAlwaysOnTop(false);
             }
+
             break;
 
         case SDL_EVENT_WINDOW_FOCUS_LOST:
             if (event.window.windowID == viewerID) {
                 setToolbarAlwaysOnTop(false);
             }
+
             break;
         default:
             break;
@@ -194,6 +234,7 @@ void UI::ensureToolbarVisible() {
                 SDL_GetError()
             );
         }
+        
     } else if ((flags & SDL_WINDOW_HIDDEN) != 0) {
         if (!SDL_ShowWindow(toolbar.window)) {
             SDL_LogError(

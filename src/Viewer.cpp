@@ -58,13 +58,15 @@ void Viewer::present(const std::string& imagePath) {
                     "Unsupported image",
                     message.c_str(),
                     app->ui().toolbarWindow()
-                )) {
+                )
+            ) {
                 SDL_LogError(
                     SDL_LOG_CATEGORY_APPLICATION,
                     "Could not show unsupported-image message: %s",
                     SDL_GetError()
                 );
             }
+
             return;
         }
 
@@ -75,6 +77,7 @@ void Viewer::present(const std::string& imagePath) {
             for (const LoadedPlugin* plugin : archivePlugins) {
                 labels.push_back(plugin->name);
             }
+
             const std::optional<std::size_t> choice = nativeMenu
                 ? nativeMenu->chooseOption(labels)
                 : std::nullopt;
@@ -90,18 +93,22 @@ void Viewer::present(const std::string& imagePath) {
             if (entry.filename.empty()) continue;
             std::string entryName = entry.path;
             if (!entryName.empty() && entryName.back() != '/'
-            &&  entryName.back() != '\\') {
+            &&  entryName.back() != '\\'
+            ) {
                 entryName.push_back('/');
             }
+
             entryName += entry.filename;
             std::replace(entryName.begin(), entryName.end(), '\\', '/');
             const std::string extension = normalizeExtension(
                 std::filesystem::path(entryName).extension().string()
             );
+
             if (imageDecoders.find(extension) != imageDecoders.end()) {
                 imageEntries.push_back(std::move(entryName));
             }
         }
+        
         if (imageEntries.empty()) {
             SDL_ShowSimpleMessageBox(
                 SDL_MESSAGEBOX_WARNING,
@@ -109,6 +116,7 @@ void Viewer::present(const std::string& imagePath) {
                 "The archive does not contain files supported by an installed image plugin.",
                 app->ui().toolbarWindow()
             );
+
             return;
         }
 
@@ -126,11 +134,15 @@ void Viewer::present(const std::string& imagePath) {
                 imageEntries[selectedEntry],
                 archiveImage,
                 archivePlugin
-            )) {
-            std::cerr << "Could not decode archive image: "
-                      << imageEntries[selectedEntry] << " from " << imagePath << "\n";
+            )
+        ) {
+            std::cerr
+            <<  "Could not decode archive image: "
+            <<  imageEntries[selectedEntry] << " from " << imagePath << "\n";
+
             return;
         }
+
         imageFromArchive = true;
     }
 
@@ -146,6 +158,7 @@ void Viewer::present(const std::string& imagePath) {
                     return pluginIdentifier(*plugin) == preferredPlugin;
                 }
             );
+
             if (preferred != supportingPlugins.end()) {
                 selectedPlugin = *preferred;
             } else {
@@ -178,6 +191,7 @@ void Viewer::present(const std::string& imagePath) {
                 }
                 labels.push_back(std::move(label));
             }
+
             const std::optional<std::size_t> choice = nativeMenu->chooseOption(labels);
             if (!choice || *choice >= supportingPlugins.size()) return;
             selectedPlugin = supportingPlugins[*choice];
@@ -227,9 +241,9 @@ void Viewer::present(const std::string& imagePath) {
 
     if (!loaded) {
         std::cerr
-            << "Could not load image: "
-            << imagePath
-            << "\n";
+        <<  "Could not load image: "
+        <<  imagePath
+        <<  "\n";
 
         return;
     }
@@ -312,9 +326,11 @@ void Viewer::showInformation() const {
     SDL_GetTextureSize(texture, &width, &height);
 
     std::ostringstream message;
-    message << currentImagePath << "\n"
-            << static_cast<int>(width) << " x "
-            << static_cast<int>(height) << " pixels";
+    message 
+    <<  currentImagePath << "\n"
+    <<  static_cast<int>(width) << " x "
+    <<  static_cast<int>(height) << " pixels";
+
     if (!currentImageMetadata.empty()) {
         message << "\n" << currentImageMetadata;
     }
@@ -335,6 +351,7 @@ void Viewer::openFileDialog() {
         "Images",
         dialogImageExtensions.empty() ? "*" : dialogImageExtensions.c_str()
     };
+
     dialogFilters[1] = {"All files", "*"};
     SDL_ShowOpenFileDialog(
         Viewer::openFileCallback,
@@ -361,6 +378,7 @@ std::map<std::string, std::vector<LoadedPlugin*>> Viewer::getDecoderOptions() {
 
 std::string Viewer::decoderPreference(const std::string& extension) const {
     const auto preference = decoderPreferences.find(normalizeExtension(extension));
+
     return preference == decoderPreferences.end() ? std::string{} : preference->second;
 }
 
@@ -374,13 +392,16 @@ void Viewer::setDecoderPreference(
             SDL_LOG_CATEGORY_APPLICATION,
             "Cannot save a decoder preference without a file extension"
         );
+
         return;
     }
+
     if (pluginId.empty()) {
         decoderPreferences.erase(normalized);
     } else {
         decoderPreferences[normalized] = pluginId;
     }
+
     saveSettings();
 }
 
@@ -403,6 +424,7 @@ void Viewer::setInterpolation(Interpolation interpolation) {
             );
         }
     }
+
     saveSettings();
 }
 
@@ -429,6 +451,7 @@ void Viewer::setToolbarOnRight(bool enabled) {
         app->ui().setToolbarOnRight(enabled);
         return;
     }
+
     viewerSettings.toolbarOnRight = enabled;
     app->ui().setToolbarOnRight(enabled);
     saveSettings();
@@ -444,6 +467,7 @@ void Viewer::loadSettings() {
         );
         return;
     }
+
     settingsPath = std::filesystem::path(preferencePath) / "settings.ini";
     SDL_free(preferencePath);
 
@@ -458,14 +482,15 @@ void Viewer::loadSettings() {
                 "Could not locate legacy settings directory: %s",
                 SDL_GetError()
             );
+
         } else {
-            const auto legacySettingsPath =
-                std::filesystem::path(legacyPreferencePath) / "settings.ini";
+            const auto legacySettingsPath = std::filesystem::path(legacyPreferencePath) / "settings.ini";
             SDL_free(legacyPreferencePath);
             settingsFileToLoad = legacySettingsPath;
             settingsExist = std::filesystem::exists(settingsFileToLoad, fileError);
         }
     }
+
     if (fileError) {
         SDL_LogWarn(
             SDL_LOG_CATEGORY_APPLICATION,
@@ -474,6 +499,7 @@ void Viewer::loadSettings() {
         );
         return;
     }
+
     if (!settingsExist) {
         return;
     }
@@ -494,8 +520,7 @@ void Viewer::loadSettings() {
             );
         }
 
-        const std::string background =
-            config.Get("viewer", "background", std::string("dark"));
+        const std::string background = config.Get("viewer", "background", std::string("dark"));
         if (background == "light") {
             viewerSettings.background = Background::Light;
         } else if (background == "checkerboard") {
@@ -508,17 +533,25 @@ void Viewer::loadSettings() {
             );
         }
 
-        viewerSettings.zoomToCursor = config.Get<bool>("viewer", "zoom_to_cursor", true);
-        viewerSettings.resetZoomOnOpen = config.Get<bool>("viewer", "reset_zoom_on_open", true);
-        viewerSettings.toolbarOnRight = config.Get<bool>("viewer", "toolbar_on_right", false);
+        viewerSettings.zoomToCursor
+        = config.Get<bool>("viewer", "zoom_to_cursor", true);
+
+        viewerSettings.resetZoomOnOpen
+        = config.Get<bool>("viewer", "reset_zoom_on_open", true);
+
+        viewerSettings.toolbarOnRight
+        = config.Get<bool>("viewer", "toolbar_on_right", false);
+
         if (config.Sections().count("decoders") != 0) {
             for (const auto& [extension, pluginId] : config.Get("decoders")) {
                 const std::string normalized = normalizeExtension(extension);
+
                 if (!normalized.empty() && !pluginId.empty()) {
                     decoderPreferences[normalized] = pluginId;
                 }
             }
         }
+
     } catch (const std::exception& error) {
         SDL_LogWarn(
             SDL_LOG_CATEGORY_APPLICATION,
@@ -527,6 +560,7 @@ void Viewer::loadSettings() {
             error.what()
         );
     }
+
     app->ui().setToolbarOnRight(viewerSettings.toolbarOnRight);
 }
 
@@ -545,12 +579,14 @@ void Viewer::saveSettings() const {
                 ? "nearest"
                 : "linear"
         );
+
         const char* background = "dark";
         if (viewerSettings.background == Background::Light) {
             background = "light";
         } else if (viewerSettings.background == Background::Checkerboard) {
             background = "checkerboard";
         }
+
         config.InsertEntry("viewer", "background", background);
         config.InsertEntry("viewer", "zoom_to_cursor", viewerSettings.zoomToCursor);
         config.InsertEntry(
@@ -558,11 +594,14 @@ void Viewer::saveSettings() const {
             "reset_zoom_on_open",
             viewerSettings.resetZoomOnOpen
         );
+
         config.InsertEntry("viewer", "toolbar_on_right", viewerSettings.toolbarOnRight);
         for (const auto& [extension, pluginId] : decoderPreferences) {
             config.InsertEntry("decoders", extension, pluginId);
         }
+
         inih::INIWriter::write(settingsPath.string(), config, true);
+
     } catch (const std::exception& error) {
         SDL_LogError(
             SDL_LOG_CATEGORY_APPLICATION,
@@ -579,6 +618,7 @@ void SDLCALL Viewer::openFileCallback(void* userdata, const char* const* filelis
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Open file dialog failed: %s", SDL_GetError());
         return;
     }
+
     if (!filelist[0]) return;
 
     SDL_Event event{};
@@ -588,6 +628,7 @@ void SDLCALL Viewer::openFileCallback(void* userdata, const char* const* filelis
     event.user.data1 = new std::string(filelist[0]);
     if (!SDL_PushEvent(&event)) {
         delete static_cast<std::string*>(event.user.data1);
+
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not queue selected image: %s", SDL_GetError());
     }
 }
@@ -609,6 +650,7 @@ bool Viewer::loadStaticImage(const std::string& imagePath, LoadedPlugin* plugin)
 
     currentImageMetadata = std::move(image.metadata);
     app->ui().resizeViewer(image.width, image.height + ViewerTitleBarHeight);
+
     return true;
 }
 
@@ -646,9 +688,9 @@ bool Viewer::createTextureFromImage(DecodedImage& image) {
 
     if (!surface) {
         std::cerr
-            << "Could not create SDL surface: "
-            << SDL_GetError()
-            << "\n";
+        <<  "Could not create SDL surface: "
+        <<  SDL_GetError()
+        <<  "\n";
 
         return false;
     }
@@ -662,9 +704,9 @@ bool Viewer::createTextureFromImage(DecodedImage& image) {
 
     if (!newTexture) {
         std::cerr
-            << "Could not create SDL texture: "
-            << SDL_GetError()
-            << "\n";
+        <<  "Could not create SDL texture: "
+        <<  SDL_GetError()
+        <<  "\n";
 
         return false;
     }
@@ -679,6 +721,7 @@ bool Viewer::createTextureFromImage(DecodedImage& image) {
             "Could not set image interpolation: %s",
             SDL_GetError()
         );
+        
         SDL_DestroyTexture(newTexture);
         return false;
     }
@@ -719,10 +762,8 @@ void Viewer::event(const SDL_Event& event) {
     if ((event.type == SDL_EVENT_WINDOW_RESIZED
     ||  event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
     &&  event.window.windowID != SDL_GetWindowID(app->ui().viewerWindow())
-    ) {
-        return;
-    }
-
+    ) return;
+    
     if ((event.type == SDL_EVENT_MOUSE_MOTION
     ||  event.type == SDL_EVENT_MOUSE_BUTTON_DOWN
     ||  event.type == SDL_EVENT_MOUSE_BUTTON_UP
@@ -731,9 +772,7 @@ void Viewer::event(const SDL_Event& event) {
     ||  event.type == SDL_EVENT_DROP_FILE
     ||  event.type == SDL_EVENT_DROP_COMPLETE
     )   && event.motion.windowID != SDL_GetWindowID(app->ui().viewerWindow())
-    ) {
-        return;
-    }
+    ) return;
 
     switch (event.type) {
         case SDL_EVENT_MOUSE_MOTION:
@@ -868,9 +907,12 @@ void Viewer::draw() {
         float width = 0.0f;
         float height = 0.0f;
         SDL_GetTextureSize(texture, &width, &height);
-        title = imagePath.filename().string() + "  "
-            + std::to_string(static_cast<int>(width)) + " x "
-            + std::to_string(static_cast<int>(height));
+
+        title 
+        =   imagePath.filename().string() + "  "
+        +   std::to_string(static_cast<int>(width)) 
+        + " x " // by
+        +   std::to_string(static_cast<int>(height));
     }
 
     if (texture) {
@@ -883,16 +925,17 @@ void Viewer::draw() {
             windowWidth,
             std::max(0, windowHeight - ViewerTitleBarHeight)
         };
+
         SDL_SetRenderClipRect(renderer, &imageArea);
         if (viewerSettings.background == Background::Light) {
             SDL_SetRenderDrawColor(renderer, 224, 224, 224, 255);
             SDL_RenderFillRect(renderer, nullptr);
+
         } else if (viewerSettings.background == Background::Checkerboard) {
             constexpr int checkerSize = 16;
             for (int y = imageArea.y; y < imageArea.y + imageArea.h; y += checkerSize) {
                 for (int x = 0; x < imageArea.w; x += checkerSize) {
-                    const bool lightSquare =
-                        ((x / checkerSize) + (y / checkerSize)) % 2 == 0;
+                    const bool lightSquare = ((x / checkerSize) + (y / checkerSize)) % 2 == 0;
                     SDL_SetRenderDrawColor(
                         renderer,
                         lightSquare ? 112 : 72,
@@ -900,12 +943,14 @@ void Viewer::draw() {
                         lightSquare ? 112 : 72,
                         255
                     );
+
                     const SDL_FRect checker{
                         static_cast<float>(x),
                         static_cast<float>(y),
                         static_cast<float>(checkerSize),
                         static_cast<float>(checkerSize)
                     };
+
                     SDL_RenderFillRect(renderer, &checker);
                 }
             }
@@ -913,6 +958,7 @@ void Viewer::draw() {
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
             SDL_RenderFillRect(renderer, nullptr);
         }
+
         SDL_RenderTextureRotated(
             renderer,
             texture,
@@ -922,6 +968,7 @@ void Viewer::draw() {
             nullptr,
             SDL_FLIP_NONE
         );
+
         SDL_SetRenderClipRect(renderer, nullptr);
     }
     
@@ -944,7 +991,8 @@ void Viewer::loadPlugins(const std::string& dirPath) {
             "Plugin loading warning",
             message.str().c_str(),
             app->ui().toolbarWindow()
-        )) {
+        )
+    ) {
         SDL_LogError(
             SDL_LOG_CATEGORY_APPLICATION,
             "Could not show plugin loading warning: %s",
@@ -1018,7 +1066,8 @@ void Viewer::zoomBy(float factor) {
     float anchorX = mouseX;
     float anchorY = mouseY;
     if (!viewerSettings.zoomToCursor
-    || SDL_GetMouseFocus() != app->ui().viewerWindow()) {
+    ||  SDL_GetMouseFocus() != app->ui().viewerWindow()
+    ) {
         anchorX = destRect.x + destRect.w * 0.5f;
         anchorY = destRect.y + destRect.h * 0.5f;
     }

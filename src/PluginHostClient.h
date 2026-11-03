@@ -22,14 +22,16 @@ inline bool writePipe(HANDLE pipe, const void* data, std::size_t size) {
     const auto* bytes = static_cast<const char*>(data);
     while (size > 0) {
         const DWORD chunk = static_cast<DWORD>(
-            size > std::numeric_limits<DWORD>::max()
-                ? std::numeric_limits<DWORD>::max()
-                : size
+            size > std::numeric_limits<DWORD>::max() ? std::numeric_limits<DWORD>::max() : size
         );
+
         DWORD written = 0;
-        if (!WriteFile(pipe, bytes, chunk, &written, nullptr) || written == 0) {
+        if (!WriteFile(pipe, bytes, chunk, &written, nullptr) 
+        ||  written == 0
+        ) {
             return false;
         }
+
         bytes += written;
         size -= written;
     }
@@ -48,9 +50,10 @@ inline bool runPluginHost(
     const std::vector<std::uint8_t>& data = {}
 ) {
     if (pluginPath.size() > std::numeric_limits<std::uint32_t>::max()
-        || imagePath.size() > std::numeric_limits<std::uint32_t>::max()
-        || extra.size() > std::numeric_limits<std::uint32_t>::max()
-        || data.size() > std::numeric_limits<std::uint32_t>::max()) {
+    ||  imagePath.size() > std::numeric_limits<std::uint32_t>::max()
+    ||  extra.size() > std::numeric_limits<std::uint32_t>::max()
+    ||  data.size() > std::numeric_limits<std::uint32_t>::max()
+    ) {
         error = "Plugin or image path is too long for the compatibility host";
         return false;
     }
@@ -236,5 +239,6 @@ inline bool runPluginHost(
         error = "The 32-bit plugin compatibility host returned malformed data";
         return false;
     }
+
     return true;
 }

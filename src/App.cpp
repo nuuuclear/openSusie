@@ -22,15 +22,14 @@ void showSplash(const std::filesystem::path& path) {
         surface->h,
         SDL_WINDOW_BORDERLESS | SDL_WINDOW_ALWAYS_ON_TOP | SDL_WINDOW_TRANSPARENT | SDL_WINDOW_HIDDEN
     );
+
     if (!window) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create splash window: %s", SDL_GetError());
         SDL_DestroySurface(surface);
         return;
     }
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
     if (!renderer) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create splash renderer: %s", SDL_GetError());
         SDL_DestroyWindow(window);
         SDL_DestroySurface(surface);
         return;
@@ -39,34 +38,29 @@ void showSplash(const std::filesystem::path& path) {
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_DestroySurface(surface);
     if (!texture) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create splash texture: %s", SDL_GetError());
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         return;
     }
-    if (!SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not enable splash transparency: %s", SDL_GetError());
-    }
 
-    if (!SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED)) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not center splash window: %s", SDL_GetError());
-    }
-    if (!SDL_ShowWindow(window)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not show splash window: %s", SDL_GetError());
-    }
-    if (!SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0)
-    ||  !SDL_RenderClear(renderer)
-    ||  !SDL_RenderTexture(renderer, texture, nullptr, nullptr)
-    ||  !SDL_RenderPresent(renderer)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not render splash image: %s", SDL_GetError());
-    }
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+
+    SDL_ShowWindow(window);
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+    SDL_RenderClear(renderer);
+    SDL_RenderTexture(renderer, texture, nullptr, nullptr);
+    SDL_RenderPresent(renderer);
+    
     SDL_Delay(SplashDurationMs);
 
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
 }
-}
+
+} // namespace
 
 App::App() {
 }
@@ -88,28 +82,16 @@ bool App::init(appConfig conf) {
     const char* basePath = SDL_GetBasePath();
 
     if (!basePath) {
-        throw std::runtime_error(
-            "Could not determine application path"
-        );
+        throw std::runtime_error("Could not determine application path");
     }
 
     std::filesystem::path root(basePath);
-    filesys.set(Paths::Resources,
-        root / "resources"
-    );
-
-    filesys.set(Paths::Plugins,
-        root / "plugins"
-    );
+    filesys.set(Paths::Resources, root / "resources");
+    filesys.set(Paths::Plugins, root / "plugins");
 
     showSplash(filesys.resolve(Paths::Resources, "BMTITLE.bmp"));
 
-    if (!userInterface.initialize(
-        conf.title,
-        conf.windowWidth,
-        conf.windowHeight,
-        filesys
-    )) {
+    if (!userInterface.initialize(conf.title, conf.windowWidth, conf.windowHeight, filesys)) {
         return false;
     }
 
@@ -143,9 +125,8 @@ void App::step() {
     Sint32 timeoutMs = -1;
     for (const auto& subroutine : subroutines) {
         const Sint32 subroutineTimeout = subroutine->millisecondsUntilUpdate();
-        if (subroutineTimeout >= 0
-        &&  (timeoutMs < 0 || subroutineTimeout < timeoutMs)
-        ) {
+        
+        if (subroutineTimeout >= 0 && (timeoutMs < 0 || subroutineTimeout < timeoutMs)) {
             timeoutMs = subroutineTimeout;
         }
     }
@@ -158,6 +139,7 @@ void App::step() {
             "Could not wait for an SDL event: %s",
             SDL_GetError()
         );
+
         running = false;
         return;
     }
@@ -167,6 +149,7 @@ void App::step() {
             case SDL_EVENT_QUIT:
                 running = false;
                 break;
+
             case SDL_EVENT_KEY_DOWN:
                 if (queuedEvent.key.key == SDLK_ESCAPE) {
                     running = false;
@@ -181,9 +164,7 @@ void App::step() {
         }
     };
 
-    if (receivedEvent) {
-        dispatchEvent(event);
-    }
+    if (receivedEvent) dispatchEvent(event);
     while (SDL_PollEvent(&event)) {
         dispatchEvent(event);
     }

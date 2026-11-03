@@ -51,6 +51,7 @@ inline PluginHandle LoadPluginLibrary(
                 0,
                 nullptr
             );
+
             if (messageLength > 0 && systemMessage) {
                 const int utf8Length = WideCharToMultiByte(
                     CP_UTF8,
@@ -62,6 +63,7 @@ inline PluginHandle LoadPluginLibrary(
                     nullptr,
                     nullptr
                 );
+
                 if (utf8Length > 0) {
                     std::string description(static_cast<std::size_t>(utf8Length), '\0');
                     WideCharToMultiByte(
@@ -74,8 +76,10 @@ inline PluginHandle LoadPluginLibrary(
                         nullptr,
                         nullptr
                     );
+
                     while (!description.empty()
-                    && (description.back() == '\r' || description.back() == '\n')
+                    &&  (description.back() == '\r' 
+                    ||  description.back() == '\n')
                     ) {
                         description.pop_back();
                     }
@@ -96,11 +100,10 @@ inline PluginHandle LoadPluginLibrary(
         path.end()
     );
 
-    PluginHandle handle =
-        dlopen(
-            stringPath.c_str(),
-            RTLD_LAZY
-        );
+    PluginHandle handle = dlopen(
+        stringPath.c_str(),
+        RTLD_LAZY
+    );
 
     if (!handle) {
         const char* error = dlerror();
@@ -143,12 +146,15 @@ inline void* GetPluginSymbol(PluginHandle handle, const std::string& symbol) {
 
 #if defined(PLATFORM_WINDOWS)
     const DWORD error = GetLastError();
-    std::cerr << "<Plugins> ERROR: Could not find symbol '"
-              << symbol << "' (error " << error << ")\n";
+    std::cerr
+    <<  "<Plugins> ERROR: Could not find symbol '"
+    <<  symbol << "' (error " << error << ")\n";
 #else
-    std::cerr << "<Plugins> ERROR: Could not find symbol '"
-              << symbol << "'\n";
+    std::cerr
+    <<  "<Plugins> ERROR: Could not find symbol '"
+    <<  symbol << "'\n";
 #endif
+
     return nullptr;
 }
 
