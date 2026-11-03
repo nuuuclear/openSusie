@@ -12,6 +12,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <fstream>
 
 #include "PlatformSymbols.h"
 #include "PluginHostProtocol.h"
@@ -31,6 +32,7 @@ struct LoadedPlugin {
     std::string description;
     std::string extensions;
     bool hostedBy32BitProcess = false;
+    bool archivePlugin = false;
 
     SusieGetPluginInfoFunc getPluginInfo = nullptr;
     SusieGetPluginInfoWFunc getPluginInfoW = nullptr;
@@ -40,11 +42,21 @@ struct LoadedPlugin {
     SusieGetPictureInfoWFunc getPictureInfoW = nullptr;
     SusieGetPictureFunc getPicture = nullptr;
     SusieGetPictureWFunc getPictureW = nullptr;
+    SusieGetArchiveInfoFunc getArchiveInfo = nullptr;
+    SusieGetArchiveInfoWFunc getArchiveInfoW = nullptr;
+    SusieGetFileFunc getFile = nullptr;
+    SusieGetFileWFunc getFileW = nullptr;
     SusieGetAnimationApiVersionFunc getAnimationApiVersion = nullptr;
     SusieOpenAnimationFunc openAnimation = nullptr;
     SusieOpenAnimationWFunc openAnimationW = nullptr;
     SusieGetAnimationFrameFunc getAnimationFrame = nullptr;
     SusieCloseAnimationFunc closeAnimation = nullptr;
+};
+
+struct SusieArchiveEntry {
+    std::string path;
+    std::string filename;
+    std::size_t position = 0;
 };
 
 struct DecodedImage {
@@ -148,14 +160,211 @@ public:
     std::vector<LoadedPlugin*> getSupportingPlugins(const std::string& filePath) {
         std::vector<LoadedPlugin*> result;
         for (auto& plugin : plugins) {
-            if (supportsFile(plugin, filePath)) result.push_back(&plugin);
+            if (!plugin.archivePlugin && supportsFile(plugin, filePath)) {
+                result.push_back(&plugin);
+            }
         }
         return result;
+    }
+
+    std::vector<LoadedPlugin*> getSupportingArchivePlugins(const std::string& filePath) {
+        std::vector<LoadedPlugin*> result;
+        for (auto& plugin : plugins) {
+            if (plugin.archivePlugin && supportsFile(plugin, filePath)) {
+                result.push_back(&plugin);
+            }
+        }
+        return result;
+    }
+
+    bool getArchiveEntries(
+        const LoadedPlugin* plugin,
+        const std::string& archivePath,
+        std::vector<SusieArchiveEntry>& entries
+    ) {
+        entries.clear();
+        if (!plugin || !plugin->archivePlugin) return false;
+#if defined(_WIN64)
+        if (plugin->hostedBy32BitProcess) {
+            PluginHostReply reply;
+            std::string error;
+            if (!runPluginHost(
+                    plugin->path,
+                    PluginHostOperation::ListArchive,
+                    archivePath,
+                    reply,
+                    error
+                )) {
+                std::cerr << "<Plugins> ERROR: " << error << "\n";
+                return false;
+            }
+            if (reply.header.status != 0) {
+                std::cerr << "<Plugins> ERROR: 32-bit archive plugin could not list archive "
+                          << archivePath << "\n";
+                return false;
+            }
+
+            const std::size_t offset = reply.header.nameBytes
+                + reply.header.extensionsBytes
+                + reply.header.descriptionBytes;
+            const std::size_t end = offset + reply.header.metadataBytes;
+            std::size_t cursor = offset;
+            while (cursor < end) {
+                if (end - cursor < sizeof(PluginHostArchiveEntry)) {
+                    entries.clear();
+                    std::cerr << "<Plugins> ERROR: 32-bit host returned malformed archive entries\n";
+                    return false;
+                }
+                PluginHostArchiveEntry record{};
+                std::memcpy(&record, reply.payload.data() + cursor, sizeof(record));
+                cursor += sizeof(record);
+                if (record.nameBytes > end - cursor
+                ||  record.position > std::numeric_limits<std::size_t>::max()) {
+                    entries.clear();
+                    std::cerr << "<Plugins> ERROR: 32-bit host returned malformed archive entry data\n";
+                    return false;
+                }
+                SusieArchiveEntry entry;
+                entry.filename.assign(reply.payload.data() + cursor, record.nameBytes);
+                entry.position = static_cast<std::size_t>(record.position);
+                entries.push_back(std::move(entry));
+                cursor += record.nameBytes;
+            }
+            return true;
+        }
+#endif
+
+        std::wstring widePath;
+        std::string ansiPath;
+        if (!preparePaths(archivePath, widePath, ansiPath)) return false;
+
+        HLOCAL info = nullptr;
+        int result = SPI_NO_FUNCTION;
+        if (plugin->getArchiveInfoW) {
+            result = plugin->getArchiveInfoW(
+                widePath.c_str(), 0, SPI_INPUT_FILE, &info
+            );
+        } else if (plugin->getArchiveInfo && !ansiPath.empty()) {
+            result = plugin->getArchiveInfo(
+                ansiPath.c_str(), 0, SPI_INPUT_FILE, &info
+            );
+        }
+
+        SusieLocalMemory infoMemory(info);
+        if (result != SPI_ALL_RIGHT || !info) {
+            std::cerr << "<Plugins> ERROR: Could not enumerate archive with "
+                      << plugin->name << " (SPI error " << result << ")\n";
+            return false;
+        }
+
+        const std::size_t infoSize = LocalSize(infoMemory.get());
+        const bool unicode = plugin->getArchiveInfoW != nullptr;
+        const std::size_t entrySize = unicode
+            ? sizeof(SusieFileInfoW)
+            : sizeof(SusieFileInfo);
+        if (infoSize == 0 || infoSize % entrySize != 0) {
+            std::cerr << "<Plugins> ERROR: Archive plugin returned malformed file information: "
+                      << plugin->name << "\n";
+            return false;
+        }
+
+        const std::size_t recordCount = infoSize / entrySize;
+        try {
+            SusieLocalLock lock(infoMemory.get());
+            if (!lock.get()) {
+                std::cerr << "<Plugins> ERROR: Could not read archive information from "
+                          << plugin->name << "\n";
+                return false;
+            }
+
+            if (unicode) {
+                const auto* records = static_cast<const SusieFileInfoW*>(lock.get());
+                for (std::size_t i = 0; i < recordCount && records[i].method[0] != 0; ++i) {
+                    SusieArchiveEntry entry;
+                    entry.path = wideToUtf8(fixedWideString(records[i].path));
+                    entry.filename = wideToUtf8(fixedWideString(records[i].filename));
+                    entry.position = records[i].position;
+                    entries.push_back(std::move(entry));
+                }
+            } else {
+                const auto* records = static_cast<const SusieFileInfo*>(lock.get());
+                for (std::size_t i = 0; i < recordCount && records[i].method[0] != 0; ++i) {
+                    SusieArchiveEntry entry;
+                    entry.path = ansiToUtf8(fixedString(records[i].path));
+                    entry.filename = ansiToUtf8(fixedString(records[i].filename));
+                    entry.position = records[i].position;
+                    entries.push_back(std::move(entry));
+                }
+            }
+        } catch (const std::bad_alloc&) {
+            entries.clear();
+            std::cerr << "<Plugins> ERROR: Out of memory enumerating archive with "
+                      << plugin->name << "\n";
+            return false;
+        }
+        return true;
+    }
+
+    bool extractArchiveFile(
+        const LoadedPlugin* plugin,
+        const std::string& archivePath,
+        const std::string& entryName,
+        std::vector<std::uint8_t>& data
+    ) {
+        data.clear();
+        if (!plugin || !plugin->archivePlugin) return false;
+        std::vector<SusieArchiveEntry> entries;
+        if (!getArchiveEntries(plugin, archivePath, entries)) return false;
+        const auto entry = std::find_if(
+            entries.begin(),
+            entries.end(),
+            [&](const SusieArchiveEntry& candidate) {
+                return archiveEntryName(candidate) == entryName;
+            }
+        );
+        return entry != entries.end()
+            && extractArchiveEntry(*plugin, archivePath, *entry, data);
+    }
+
+    bool decodeArchiveEntry(
+        const std::string& archivePath,
+        const std::string& entryName,
+        DecodedImage& image,
+        LoadedPlugin* selectedArchivePlugin = nullptr
+    ) {
+        image = {};
+        std::vector<LoadedPlugin*> archivePlugins = getSupportingArchivePlugins(archivePath);
+        for (LoadedPlugin* archivePlugin : archivePlugins) {
+            if (selectedArchivePlugin && selectedArchivePlugin != archivePlugin) continue;
+            std::vector<SusieArchiveEntry> entries;
+            if (!getArchiveEntries(archivePlugin, archivePath, entries)) continue;
+
+            const auto entry = std::find_if(
+                entries.begin(),
+                entries.end(),
+                [&](const SusieArchiveEntry& candidate) {
+                    return archiveEntryName(candidate) == entryName;
+                }
+            );
+            if (entry == entries.end()) continue;
+
+            std::vector<std::uint8_t> data;
+            if (!extractArchiveEntry(*archivePlugin, archivePath, *entry, data)) continue;
+            for (auto& decoder : plugins) {
+                if (!decoder.archivePlugin
+                &&  decodeImageFromMemory(&decoder, entryName, data, image)
+                ) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     std::map<std::string, std::vector<LoadedPlugin*>> getDeclaredPluginsByExtension() {
         std::map<std::string, std::vector<LoadedPlugin*>> result;
         for (auto& plugin : plugins) {
+            if (plugin.archivePlugin) continue;
             std::string token;
             auto addExtension = [&](std::string value) {
                 value.erase(
@@ -170,8 +379,7 @@ public:
                 if (value.empty()) return;
 
                 auto& extensions = result[value];
-                if (std::find(extensions.begin(), extensions.end(), &plugin)
-                    == extensions.end()) {
+                if (std::find(extensions.begin(), extensions.end(), &plugin) == extensions.end()) {
                     extensions.push_back(&plugin);
                 }
             };
@@ -195,15 +403,27 @@ public:
 
     bool supportsFile(const std::string& filePath) const {
         return std::any_of(plugins.begin(), plugins.end(), [&](const LoadedPlugin& plugin) {
-            return supportsFile(plugin, filePath);
+            return !plugin.archivePlugin && supportsFile(plugin, filePath);
         });
     }
 
-    bool openAnimation(
-        const std::string& filePath,
-        PluginAnimation& animation,
-        LoadedPlugin* selectedPlugin = nullptr
+    bool pluginSupportsFile(
+        const LoadedPlugin* plugin,
+        const std::string& filePath
+    ) const {
+        return plugin && supportsFile(*plugin, filePath);
+    }
+
+    bool decodeImageBuffer(
+        const LoadedPlugin* plugin,
+        const std::string& fileName,
+        const std::vector<std::uint8_t>& data,
+        DecodedImage& image
     ) {
+        return decodeImageFromMemory(plugin, fileName, data, image);
+    }
+
+    bool openAnimation(const std::string& filePath, PluginAnimation& animation, LoadedPlugin* selectedPlugin = nullptr) {
         closeAnimation(animation);
 
         std::wstring widePath;
@@ -212,8 +432,12 @@ public:
 
         for (auto& plugin : plugins) {
             if (selectedPlugin && selectedPlugin != &plugin) continue;
-            if (!plugin.openAnimation || !plugin.getAnimationFrame || !plugin.closeAnimation
-                || !supportsFile(plugin, filePath)) {
+            if (plugin.archivePlugin
+            ||  !plugin.openAnimation
+            ||  !plugin.getAnimationFrame
+            ||  !plugin.closeAnimation
+            ||  !supportsFile(plugin, filePath)
+            ) {
                 continue;
             }
 
@@ -747,6 +971,284 @@ private:
         return true;
     }
 
+    template <std::size_t Size>
+    static std::string fixedString(const char (&value)[Size]) {
+        const auto* end = std::find(value, value + Size, '\0');
+        return std::string(value, static_cast<std::size_t>(end - value));
+    }
+
+    template <std::size_t Size>
+    static std::wstring fixedWideString(const wchar_t (&value)[Size]) {
+        const auto* end = std::find(value, value + Size, L'\0');
+        return std::wstring(value, static_cast<std::size_t>(end - value));
+    }
+
+    static std::string archiveEntryName(const SusieArchiveEntry& entry) {
+        std::string path = entry.path;
+        std::replace(path.begin(), path.end(), '\\', '/');
+        std::string filename = entry.filename;
+        std::replace(filename.begin(), filename.end(), '\\', '/');
+        if (path.empty()) return filename;
+        if (path.back() != '/') path.push_back('/');
+        if (!filename.empty() && filename.front() == '/') filename.erase(filename.begin());
+        return path + filename;
+    }
+
+    bool extractArchiveEntry(
+        const LoadedPlugin& plugin,
+        const std::string& archivePath,
+        const SusieArchiveEntry& entry,
+        std::vector<std::uint8_t>& data
+    ) {
+        data.clear();
+#if defined(_WIN64)
+        if (plugin.hostedBy32BitProcess) {
+            PluginHostReply reply;
+            std::string error;
+            if (!runPluginHost(
+                    plugin.path,
+                    PluginHostOperation::ExtractArchiveEntry,
+                    archivePath,
+                    reply,
+                    error,
+                    archiveEntryName(entry)
+                )) {
+                std::cerr << "<Plugins> ERROR: " << error << "\n";
+                return false;
+            }
+            if (reply.header.status != 0 || reply.header.pixelsBytes == 0) {
+                std::cerr << "<Plugins> ERROR: 32-bit archive plugin could not extract "
+                          << archiveEntryName(entry) << "\n";
+                return false;
+            }
+            const std::size_t offset = reply.header.nameBytes
+                + reply.header.extensionsBytes
+                + reply.header.descriptionBytes
+                + reply.header.metadataBytes;
+            if (offset > reply.payload.size()
+            ||  reply.header.pixelsBytes > reply.payload.size() - offset) {
+                std::cerr << "<Plugins> ERROR: 32-bit host returned malformed archive data\n";
+                return false;
+            }
+            const auto* begin = reinterpret_cast<const std::uint8_t*>(
+                reply.payload.data() + offset
+            );
+            data.assign(begin, begin + reply.header.pixelsBytes);
+            return true;
+        }
+#endif
+        std::wstring widePath;
+        std::string ansiPath;
+        if (!preparePaths(archivePath, widePath, ansiPath)) return false;
+
+        HLOCAL extracted = nullptr;
+        int result = SPI_NO_FUNCTION;
+        if (plugin.getFileW) {
+            result = plugin.getFileW(
+                widePath.c_str(),
+                entry.position,
+                reinterpret_cast<LPWSTR>(&extracted),
+                SPI_OUTPUT_MEMORY,
+                nullptr,
+                0
+            );
+        } else if (plugin.getFile && !ansiPath.empty()) {
+            result = plugin.getFile(
+                ansiPath.c_str(),
+                entry.position,
+                reinterpret_cast<LPSTR>(&extracted),
+                SPI_OUTPUT_MEMORY,
+                nullptr,
+                0
+            );
+        }
+
+        if (result != SPI_ALL_RIGHT || !extracted) {
+            if (extracted) LocalFree(extracted);
+            std::cerr << "<Plugins> ERROR: Could not extract "
+                      << archiveEntryName(entry) << " with " << plugin.name
+                      << " (SPI error " << result << ")\n";
+            return false;
+        }
+        SusieLocalMemory extractedMemory(extracted);
+
+        const std::size_t size = LocalSize(extractedMemory.get());
+        if (size == 0) {
+            std::cerr << "<Plugins> ERROR: Archive plugin returned an empty file: "
+                      << archiveEntryName(entry) << "\n";
+            return false;
+        }
+
+        try {
+            SusieLocalLock lock(extractedMemory.get());
+            if (!lock.get()) {
+                std::cerr << "<Plugins> ERROR: Could not read extracted archive file: "
+                          << archiveEntryName(entry) << "\n";
+                return false;
+            }
+            const auto* bytes = static_cast<const std::uint8_t*>(lock.get());
+            data.assign(bytes, bytes + size);
+        } catch (const std::bad_alloc&) {
+            data.clear();
+            std::cerr << "<Plugins> ERROR: Out of memory extracting archive file: "
+                      << archiveEntryName(entry) << "\n";
+            return false;
+        } catch (const std::length_error&) {
+            data.clear();
+            std::cerr << "<Plugins> ERROR: Archive file is too large to load: "
+                      << archiveEntryName(entry) << "\n";
+            return false;
+        }
+        return true;
+    }
+
+    bool decodeImageFromMemory(
+        const LoadedPlugin* plugin,
+        const std::string& fileName,
+        const std::vector<std::uint8_t>& data,
+        DecodedImage& image
+    ) {
+        image = {};
+        if (!plugin || data.empty()) return false;
+#if defined(_WIN64)
+        if (plugin->hostedBy32BitProcess) {
+            PluginHostReply reply;
+            std::string error;
+            if (!runPluginHost(
+                    plugin->path,
+                    PluginHostOperation::DecodeImageMemory,
+                    fileName,
+                    reply,
+                    error,
+                    {},
+                    data
+                )
+            ) {
+                std::cerr << "<Plugins> ERROR: " << error << "\n";
+                return false;
+            }
+            if (reply.header.status != 0
+            ||  reply.header.pixelsBytes == 0
+            ||  reply.header.width <= 0
+            ||  reply.header.height <= 0
+            ||  static_cast<std::uint64_t>(reply.header.width)
+                * static_cast<std::uint64_t>(reply.header.height) * 4
+                != reply.header.pixelsBytes
+            ) {
+                return false;
+            }
+            const std::size_t metadataOffset = reply.header.nameBytes
+                + reply.header.extensionsBytes
+                + reply.header.descriptionBytes;
+            const std::size_t pixelsOffset = metadataOffset
+                + reply.header.metadataBytes;
+            image.width = reply.header.width;
+            image.height = reply.header.height;
+            image.metadata.assign(
+                reply.payload.data() + metadataOffset,
+                reply.header.metadataBytes
+            );
+            const auto* pixelStart = reinterpret_cast<const std::uint8_t*>(
+                reply.payload.data() + pixelsOffset
+            );
+            image.pixels.assign(pixelStart, pixelStart + reply.header.pixelsBytes);
+            return true;
+        }
+#endif
+
+        const auto* bytes = reinterpret_cast<const char*>(data.data());
+        const auto* wideBytes = reinterpret_cast<LPCWSTR>(data.data());
+        SusiePictureInfo pictureInfo{};
+        int infoResult = SPI_NO_FUNCTION;
+        if (plugin->getPictureInfoW) {
+            infoResult = plugin->getPictureInfoW(
+                wideBytes, data.size(), SPI_INPUT_MEMORY, &pictureInfo
+            );
+        } else if (plugin->getPictureInfo) {
+            infoResult = plugin->getPictureInfo(
+                bytes, data.size(), SPI_INPUT_MEMORY, &pictureInfo
+            );
+        }
+
+        if (infoResult != SPI_ALL_RIGHT && infoResult != SPI_NO_FUNCTION) {
+            freePictureInfo(pictureInfo);
+            return false;
+        }
+        if (infoResult == SPI_ALL_RIGHT) {
+            try {
+                image.metadata = readPictureMetadata(pictureInfo.hInfo);
+            } catch (const std::bad_alloc&) {
+                freePictureInfo(pictureInfo);
+                std::cerr << "<Plugins> ERROR: Out of memory reading archive image metadata from "
+                          << plugin->name << "\n";
+                return false;
+            } catch (const std::length_error&) {
+                freePictureInfo(pictureInfo);
+                std::cerr << "<Plugins> ERROR: Archive image metadata is too large for "
+                          << plugin->name << "\n";
+                return false;
+            }
+        }
+        freePictureInfo(pictureInfo);
+
+        HANDLE bitmapInfo = nullptr;
+        HANDLE bitmapData = nullptr;
+        int pictureResult = SPI_OTHER_ERROR;
+        if (plugin->getPictureW) {
+            pictureResult = plugin->getPictureW(
+                wideBytes,
+                data.size(),
+                SPI_INPUT_MEMORY | SPI_OUTPUT_MEMORY,
+                &bitmapInfo,
+                &bitmapData,
+                nullptr,
+                0
+            );
+        } else if (plugin->getPicture) {
+            pictureResult = plugin->getPicture(
+                bytes,
+                data.size(),
+                SPI_INPUT_MEMORY | SPI_OUTPUT_MEMORY,
+                &bitmapInfo,
+                &bitmapData,
+                nullptr,
+                0
+            );
+        }
+
+        if (pictureResult != SPI_ALL_RIGHT) {
+            SusieReleasePicture(&bitmapInfo, &bitmapData);
+            image = {};
+            return false;
+        }
+
+        bool converted = false;
+        try {
+            converted = SusieConvertDibToRgba(
+                bitmapInfo, bitmapData, image.pixels, image.width, image.height
+            );
+        } catch (const std::bad_alloc&) {
+            SusieReleasePicture(&bitmapInfo, &bitmapData);
+            image = {};
+            std::cerr << "<Plugins> ERROR: Out of memory decoding archive image with "
+                      << plugin->name << "\n";
+            return false;
+        } catch (const std::length_error&) {
+            SusieReleasePicture(&bitmapInfo, &bitmapData);
+            image = {};
+            std::cerr << "<Plugins> ERROR: Archive image dimensions exceed available memory for "
+                      << plugin->name << "\n";
+            return false;
+        }
+        SusieReleasePicture(&bitmapInfo, &bitmapData);
+        if (!converted) {
+            image = {};
+            return false;
+        }
+        (void)fileName;
+        return true;
+    }
+
     bool loadPlugin(
         const fs::path& path,
         std::string& reason,
@@ -790,46 +1292,33 @@ private:
         plugin.getPictureW = reinterpret_cast<SusieGetPictureWFunc>(
             getSusieSymbol(handle, "GetPictureW", 28)
         );
+        plugin.getArchiveInfo = reinterpret_cast<SusieGetArchiveInfoFunc>(
+            getSusieSymbol(handle, "GetArchiveInfo", 16)
+        );
+        plugin.getArchiveInfoW = reinterpret_cast<SusieGetArchiveInfoWFunc>(
+            getSusieSymbol(handle, "GetArchiveInfoW", 16)
+        );
+        plugin.getFile = reinterpret_cast<SusieGetFileFunc>(
+            getSusieSymbol(handle, "GetFile", 24)
+        );
+        plugin.getFileW = reinterpret_cast<SusieGetFileWFunc>(
+            getSusieSymbol(handle, "GetFileW", 24)
+        );
         plugin.getAnimationApiVersion = reinterpret_cast<SusieGetAnimationApiVersionFunc>(
             getSusieSymbol(handle, "OpenSusieGetAnimationApiVersion", 0)
         );
-        if (!plugin.getAnimationApiVersion) {
-            plugin.getAnimationApiVersion = reinterpret_cast<SusieGetAnimationApiVersionFunc>(
-                getSusieSymbol(handle, "ImagrGetAnimationApiVersion", 0)
-            );
-        }
         plugin.openAnimation = reinterpret_cast<SusieOpenAnimationFunc>(
             getSusieSymbol(handle, "OpenSusieOpenAnimation", 20)
         );
-        if (!plugin.openAnimation) {
-            plugin.openAnimation = reinterpret_cast<SusieOpenAnimationFunc>(
-                getSusieSymbol(handle, "ImagrOpenAnimation", 20)
-            );
-        }
         plugin.openAnimationW = reinterpret_cast<SusieOpenAnimationWFunc>(
             getSusieSymbol(handle, "OpenSusieOpenAnimationW", 20)
         );
-        if (!plugin.openAnimationW) {
-            plugin.openAnimationW = reinterpret_cast<SusieOpenAnimationWFunc>(
-                getSusieSymbol(handle, "ImagrOpenAnimationW", 20)
-            );
-        }
         plugin.getAnimationFrame = reinterpret_cast<SusieGetAnimationFrameFunc>(
             getSusieSymbol(handle, "OpenSusieGetAnimationFrame", 20)
         );
-        if (!plugin.getAnimationFrame) {
-            plugin.getAnimationFrame = reinterpret_cast<SusieGetAnimationFrameFunc>(
-                getSusieSymbol(handle, "ImagrGetAnimationFrame", 20)
-            );
-        }
         plugin.closeAnimation = reinterpret_cast<SusieCloseAnimationFunc>(
             getSusieSymbol(handle, "OpenSusieCloseAnimation", 4)
         );
-        if (!plugin.closeAnimation) {
-            plugin.closeAnimation = reinterpret_cast<SusieCloseAnimationFunc>(
-                getSusieSymbol(handle, "ImagrCloseAnimation", 4)
-            );
-        }
 
         if (plugin.getAnimationApiVersion
         &&  plugin.getAnimationApiVersion() != SUSIE_ANIMATION_API_VERSION
@@ -852,26 +1341,6 @@ private:
             plugin.closeAnimation = nullptr;
         }
 
-        if ((!plugin.isSupported && !plugin.isSupportedW)
-        ||  (!plugin.getPicture && !plugin.getPictureW)
-        ||  (!plugin.getPluginInfo && !plugin.getPluginInfoW)
-        ) {
-            reason = "Missing required Susie exports:";
-            if (!plugin.isSupported && !plugin.isSupportedW) {
-                reason += " IsSupported/IsSupportedW";
-            }
-            if (!plugin.getPicture && !plugin.getPictureW) {
-                reason += " GetPicture/GetPictureW";
-            }
-            if (!plugin.getPluginInfo && !plugin.getPluginInfoW) {
-                reason += " GetPluginInfo/GetPluginInfoW";
-            }
-            std::cerr << "<Plugins> ERROR: Not a Susie image plugin: "
-                      << path.filename().string() << "\n";
-            FreePluginLibrary(handle);
-            return false;
-        }
-
         std::string pluginType;
         if (!queryInfo(plugin, 0, pluginType)) {
             reason = "Could not read the Susie plugin type from GetPluginInfo";
@@ -880,9 +1349,47 @@ private:
             FreePluginLibrary(handle);
             return false;
         }
-        if (pluginType != "00IN") {
-            reason = "Plugin type is '" + pluginType + "', not '00IN'";
-            std::cerr << "<Plugins> ERROR: Susie plugin is not an image plugin: "
+
+        if (pluginType == "00IN") {
+            if ((!plugin.isSupported && !plugin.isSupportedW)
+            ||  (!plugin.getPicture && !plugin.getPictureW)
+            ) {
+                reason = "Missing required Susie image-plugin exports:";
+                if (!plugin.isSupported && !plugin.isSupportedW) {
+                    reason += " IsSupported/IsSupportedW";
+                }
+                if (!plugin.getPicture && !plugin.getPictureW) {
+                    reason += " GetPicture/GetPictureW";
+                }
+                std::cerr << "<Plugins> ERROR: Not a Susie image plugin: "
+                          << path.filename().string() << "\n";
+                FreePluginLibrary(handle);
+                return false;
+            }
+        } else if (pluginType == "00AR") {
+            if ((!plugin.isSupported && !plugin.isSupportedW)
+            ||  (!plugin.getArchiveInfo && !plugin.getArchiveInfoW)
+            ||  (!plugin.getFile && !plugin.getFileW)
+            ) {
+                reason = "Missing required Susie archive-plugin exports:";
+                if (!plugin.isSupported && !plugin.isSupportedW) {
+                    reason += " IsSupported/IsSupportedW";
+                }
+                if (!plugin.getArchiveInfo && !plugin.getArchiveInfoW) {
+                    reason += " GetArchiveInfo/GetArchiveInfoW";
+                }
+                if (!plugin.getFile && !plugin.getFileW) {
+                    reason += " GetFile/GetFileW";
+                }
+                std::cerr << "<Plugins> ERROR: Not a Susie archive plugin: "
+                          << path.filename().string() << "\n";
+                FreePluginLibrary(handle);
+                return false;
+            }
+            plugin.archivePlugin = true;
+        } else {
+            reason = "Plugin type is '" + pluginType + "', not '00IN' or '00AR'";
+            std::cerr << "<Plugins> ERROR: Unsupported Susie plugin type: "
                       << path.filename().string() << "\n";
             FreePluginLibrary(handle);
             return false;
@@ -894,7 +1401,9 @@ private:
         if (plugin.name.empty()) plugin.name = path.stem().string();
 
         plugins.push_back(std::move(plugin));
-        std::cout << "<Plugins> Susie image plugin loaded: "
+        std::cout << "<Plugins> Susie "
+                  << (plugins.back().archivePlugin ? "archive" : "image")
+                  << " plugin loaded: "
                   << plugins.back().name;
         if (!plugins.back().extensions.empty()) {
             std::cout << " (" << plugins.back().extensions << ")";
@@ -936,6 +1445,11 @@ private:
         LoadedPlugin plugin;
         plugin.path = pathToUtf8(path);
         plugin.hostedBy32BitProcess = true;
+        if (reply.header.pluginType != 1 && reply.header.pluginType != 2) {
+            reason += "; 32-bit host returned an unsupported plugin type";
+            return false;
+        }
+        plugin.archivePlugin = reply.header.pluginType == 2;
         std::size_t offset = 0;
         auto readString = [&](std::uint32_t size, std::string& value) {
             value.assign(reply.payload.data() + offset, size);
@@ -961,28 +1475,77 @@ private:
         if (plugin.hostedBy32BitProcess) {
             PluginHostReply reply;
             std::string error;
+
             if (!runPluginHost(
-                    plugin.path,
-                    PluginHostOperation::IsSupported,
-                    filePath,
-                    reply,
-                    error
-                )) {
+                plugin.path,
+                PluginHostOperation::IsSupported,
+                filePath,
+                reply,
+                error
+            )) {
                 std::cerr << "<Plugins> ERROR: " << error << "\n";
                 return false;
             }
-            return reply.header.status == 0 || declaresExtension(plugin, filePath);
+
+            if (reply.header.status == 0) {
+                return true;
+            }
+
+            if (reply.header.status == 2) {
+                return declaresExtension(plugin, filePath);
+            }
+
+            std::cerr << "<Plugins> ERROR: IsSupported failed for "
+                << plugin.path << "\n";
+            return false;
         }
 #endif
+
         std::wstring widePath;
         std::string ansiPath;
-        if (!preparePaths(filePath, widePath, ansiPath)) return false;
 
-        if (plugin.isSupportedW) {
-            return plugin.isSupportedW(widePath.c_str(), 0) > 0;
+        if (!preparePaths(filePath, widePath, ansiPath)) {
+            return false;
         }
-        return plugin.isSupported && !ansiPath.empty()
-            && plugin.isSupported(ansiPath.c_str(), 0) > 0;
+
+        std::array<unsigned char, 2048> header{};
+
+        std::ifstream file(
+            std::filesystem::path(
+                reinterpret_cast<const char8_t*>(filePath.data()),
+                reinterpret_cast<const char8_t*>(filePath.data() + filePath.size())
+            ),
+            std::ios::binary
+        );
+
+        if (!file) {
+            return false;
+        }
+
+        file.read(
+            reinterpret_cast<char*>(header.data()),
+            static_cast<std::streamsize>(header.size())
+        );
+
+        if (file.bad()) {
+            return false;
+        }
+
+        if (plugin.isSupportedW != nullptr) {
+            return plugin.isSupportedW(
+                widePath.c_str(),
+                header.data()
+            ) != 0;
+        }
+
+        if (plugin.isSupported != nullptr && !ansiPath.empty()) {
+            return plugin.isSupported(
+                ansiPath.c_str(),
+                header.data()
+            ) != 0;
+        }
+
+        return declaresExtension(plugin, filePath);
     }
 
     static std::string pathToUtf8(const fs::path& path) {
@@ -1072,7 +1635,7 @@ private:
             return static_cast<char>(std::tolower(ch));
         });
 
-        return extension == ".spi";
+        return extension == ".spi" || extension == ".sph";
     }
 
     std::vector<LoadedPlugin> plugins;

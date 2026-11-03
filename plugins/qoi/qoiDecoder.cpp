@@ -3,6 +3,8 @@
 #define QOI_IMPLEMENTATION
 #include "qoi.h"
 
+#include <limits>
+
 namespace {
 const char* const PluginInfo[] = {
     "00IN",
@@ -13,10 +15,16 @@ const char* const PluginInfo[] = {
 
 const std::vector<std::string> Extensions = {".qoi"};
 
-SusieDecodedImage decodeImage(const char* filePath) {
+SusieDecodedImage decodeImage(
+    const char* buffer,
+    std::size_t bufferSize,
+    bool memoryInput
+) {
     SusieDecodedImage image{};
     qoi_desc description{};
-    image.pixels = static_cast<std::uint8_t*>(qoi_read(filePath, &description, 4));
+    image.pixels = static_cast<std::uint8_t*>(memoryInput
+        ? qoi_decode(buffer, static_cast<int>(bufferSize), &description, 4)
+        : qoi_read(buffer, &description, 4));
     if (!image.pixels) return {};
 
     image.width = static_cast<int>(description.width);
@@ -30,8 +38,14 @@ void freeImage(SusieDecodedImage& image) {
     image = {};
 }
 
-int checkInput(const char* buffer, unsigned int flags) {
-    if (!buffer || (flags & SPI_INPUT_MEMORY)) return SPI_NOT_SUPPORT;
+int checkInput(const char* buffer, std::size_t bufferSize, unsigned int flags) {
+    if (!buffer) return SPI_NOT_SUPPORT;
+    if ((flags & SPI_INPUT_MEMORY)
+    &&  (bufferSize == 0
+    ||   bufferSize > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+    ) {
+        return SPI_NOT_SUPPORT;
+    }
     return SPI_ALL_RIGHT;
 }
 }
@@ -49,15 +63,17 @@ SUSIE_EXPORT int WINAPI IsSupported(LPCSTR filename, DWORD_PTR) {
 
 SUSIE_EXPORT int WINAPI GetPictureInfo(
     LPCSTR buffer,
-    std::size_t,
+    std::size_t bufferSize,
     unsigned int flags,
     SusiePictureInfo* pictureInfo
 ) {
-    const int inputResult = checkInput(buffer, flags);
+    const int inputResult = checkInput(buffer, bufferSize, flags);
     if (inputResult != SPI_ALL_RIGHT) return inputResult;
     if (!pictureInfo) return SPI_OTHER_ERROR;
 
-    SusieDecodedImage image = decodeImage(buffer);
+    SusieDecodedImage image = decodeImage(
+        buffer, bufferSize, (flags & SPI_INPUT_MEMORY) != 0
+    );
     if (!image.pixels) return SPI_NOT_SUPPORT;
 
     SusieSetPictureInfo(pictureInfo, image.width, image.height);
@@ -67,7 +83,7 @@ SUSIE_EXPORT int WINAPI GetPictureInfo(
 
 SUSIE_EXPORT int WINAPI GetPicture(
     LPCSTR buffer,
-    std::size_t,
+    std::size_t bufferSize,
     unsigned int flags,
     HANDLE* bitmapInfo,
     HANDLE* bitmapData,
@@ -78,11 +94,13 @@ SUSIE_EXPORT int WINAPI GetPicture(
     *bitmapInfo = nullptr;
     *bitmapData = nullptr;
 
-    const int inputResult = checkInput(buffer, flags);
+    const int inputResult = checkInput(buffer, bufferSize, flags);
     if (inputResult != SPI_ALL_RIGHT) return inputResult;
     if (progress && progress(0, 1, userData) != 0) return SPI_ABORT;
 
-    SusieDecodedImage image = decodeImage(buffer);
+    SusieDecodedImage image = decodeImage(
+        buffer, bufferSize, (flags & SPI_INPUT_MEMORY) != 0
+    );
     if (!image.pixels) return SPI_NOT_SUPPORT;
 
     const bool success = SusieWriteRgbaDib(

@@ -121,6 +121,24 @@ private:
     void* data_;
 };
 
+class SusieLocalMemory {
+public:
+    explicit SusieLocalMemory(HLOCAL handle) : handle_(handle) {}
+    ~SusieLocalMemory() {
+        if (handle_) LocalFree(handle_);
+    }
+
+    SusieLocalMemory(const SusieLocalMemory&) = delete;
+    SusieLocalMemory& operator=(const SusieLocalMemory&) = delete;
+
+    HLOCAL get() const {
+        return handle_;
+    }
+
+private:
+    HLOCAL handle_;
+};
+
 #pragma pack(push, 1)
 struct SusiePictureInfo {
     std::int32_t left;
@@ -159,8 +177,56 @@ inline constexpr std::uint32_t SUSIE_BI_ALPHABITFIELDS = 6;
 
 using SusieGetPluginInfoFunc = int (WINAPI*)(int, LPSTR, int);
 using SusieGetPluginInfoWFunc = int (WINAPI*)(int, LPWSTR, int);
-using SusieIsSupportedFunc = int (WINAPI*)(LPCSTR, DWORD_PTR);
-using SusieIsSupportedWFunc = int (WINAPI*)(LPCWSTR, DWORD_PTR);
+using SusieIsSupportedFunc = int (WINAPI*)(LPCSTR, const void*);
+using SusieIsSupportedWFunc = int (WINAPI*)(LPCWSTR, const void*);
+
+using SusieGetArchiveInfoFunc = int (WINAPI*)(LPCSTR, std::size_t, unsigned int, HLOCAL*);
+using SusieGetArchiveInfoWFunc = int (WINAPI*)(LPCWSTR, std::size_t, unsigned int, HLOCAL*);
+
+#pragma pack(push, 1)
+struct SusieFileInfo {
+    std::uint8_t method[8];
+    std::uintptr_t position;
+    std::uintptr_t compressedSize;
+    std::uintptr_t fileSize;
+    std::uintptr_t timestamp;
+    char path[200];
+    char filename[200];
+    std::uint32_t crc;
+#if defined(_WIN64)
+    char padding[4];
+#endif
+};
+#pragma pack(pop)
+
+struct SusieFileInfoW {
+    std::uint8_t method[8];
+    std::uintptr_t position;
+    std::uintptr_t compressedSize;
+    std::uintptr_t fileSize;
+    std::uintptr_t timestamp;
+    wchar_t path[200];
+    wchar_t filename[200];
+    std::uint32_t crc;
+};
+
+using SusieGetFileFunc = int (WINAPI*)(
+    LPCSTR,
+    std::size_t,
+    LPSTR,
+    unsigned int,
+    SusieProgressCallback,
+    std::intptr_t
+);
+using SusieGetFileWFunc = int (WINAPI*)(
+    LPCWSTR,
+    std::size_t,
+    LPWSTR,
+    unsigned int,
+    SusieProgressCallback,
+    std::intptr_t
+);
+
 using SusieGetPictureInfoFunc = int (WINAPI*)(LPCSTR, std::size_t, unsigned int, SusiePictureInfo*);
 using SusieGetPictureInfoWFunc = int (WINAPI*)(LPCWSTR, std::size_t, unsigned int, SusiePictureInfo*);
 using SusieGetPictureFunc = int (WINAPI*)(

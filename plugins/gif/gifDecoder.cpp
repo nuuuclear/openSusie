@@ -26,17 +26,46 @@ struct GifAnimationData {
     std::vector<GifAnimationFrame> frames;
 };
 
+struct GifMemorySource {
+    const GifByteType* data = nullptr;
+    std::size_t size = 0;
+    std::size_t offset = 0;
+};
+
+int readGifMemory(GifFileType* gif, GifByteType* output, int requestedBytes) {
+    auto* source = static_cast<GifMemorySource*>(gif->UserData);
+    if (!source || requestedBytes <= 0 || source->offset >= source->size) return 0;
+    const std::size_t bytesToRead = std::min(
+        static_cast<std::size_t>(requestedBytes),
+        source->size - source->offset
+    );
+    std::memcpy(output, source->data + source->offset, bytesToRead);
+    source->offset += bytesToRead;
+    return static_cast<int>(bytesToRead);
+}
+
 class GifDecoder {
 public:
     SusieDecodedImage decodeImage(const std::string& filePath) {
+        return decodeImage(filePath.c_str(), 0, false);
+    }
+
+    SusieDecodedImage decodeImage(
+        const char* buffer,
+        std::size_t bufferSize,
+        bool memoryInput
+    ) {
         SusieDecodedImage result{};
 
         int error = 0;
-
-        GifFileType* gif = DGifOpenFileName(
-            filePath.c_str(),
-            &error
-        );
+        GifMemorySource memorySource{
+            reinterpret_cast<const GifByteType*>(buffer),
+            bufferSize,
+            0
+        };
+        GifFileType* gif = memoryInput
+            ? DGifOpen(&memorySource, readGifMemory, &error)
+            : DGifOpenFileName(buffer, &error);
 
         if (!gif) return {};
         GifFileGuard guard{gif};
@@ -61,9 +90,9 @@ public:
         if (imageWidth > std::numeric_limits<size_t>::max() / imageHeight / 4) {
             return {};
         }
-        const size_t bufferSize = imageWidth * imageHeight * 4;
+        const size_t pixelBufferSize = imageWidth * imageHeight * 4;
 
-        std::vector<uint8_t> canvas(bufferSize, 0);
+        std::vector<uint8_t> canvas(pixelBufferSize, 0);
 
         // render the first frame
         renderFrame(
@@ -73,8 +102,8 @@ public:
             transparentColorIndex(gif->SavedImages[0])
         );
 
-        auto* pixels = new uint8_t[bufferSize];
-        std::memcpy(pixels, canvas.data(), bufferSize);
+        auto* pixels = new uint8_t[pixelBufferSize];
+        std::memcpy(pixels, canvas.data(), pixelBufferSize);
 
         result.pixels = pixels;
         result.width = width;
@@ -376,8 +405,10 @@ const char* const PluginInfo[] = {
 
 const std::vector<std::string> Extensions = {".gif"};
 
-int checkInput(const char* buffer, unsigned int flags) {
-    if (!buffer || (flags & SPI_INPUT_MEMORY)) return SPI_NOT_SUPPORT;
+int checkInput(const char* buffer, std::size_t bufferSize, unsigned int flags) {
+    if (!buffer || ((flags & SPI_INPUT_MEMORY) && bufferSize == 0)) {
+        return SPI_NOT_SUPPORT;
+    }
     return SPI_ALL_RIGHT;
 }
 }
@@ -461,18 +492,20 @@ SUSIE_EXPORT int WINAPI IsSupported(LPCSTR filename, DWORD_PTR) {
 
 SUSIE_EXPORT int WINAPI GetPictureInfo(
     LPCSTR buffer,
-    std::size_t,
+    std::size_t bufferSize,
     unsigned int flags,
     SusiePictureInfo* pictureInfo
 ) {
-    const int inputResult = checkInput(buffer, flags);
+    const int inputResult = checkInput(buffer, bufferSize, flags);
     if (inputResult != SPI_ALL_RIGHT) return inputResult;
     if (!pictureInfo) return SPI_OTHER_ERROR;
 
     GifDecoder decoder;
     SusieDecodedImage image{};
     try {
-        image = decoder.decodeImage(buffer);
+        image = decoder.decodeImage(
+            buffer, bufferSize, (flags & SPI_INPUT_MEMORY) != 0
+        );
     } catch (const std::bad_alloc&) {
         return SPI_NO_MEMORY;
     } catch (const std::length_error&) {
@@ -487,7 +520,7 @@ SUSIE_EXPORT int WINAPI GetPictureInfo(
 
 SUSIE_EXPORT int WINAPI GetPicture(
     LPCSTR buffer,
-    std::size_t,
+    std::size_t bufferSize,
     unsigned int flags,
     HANDLE* bitmapInfo,
     HANDLE* bitmapData,
@@ -498,14 +531,16 @@ SUSIE_EXPORT int WINAPI GetPicture(
     *bitmapInfo = nullptr;
     *bitmapData = nullptr;
 
-    const int inputResult = checkInput(buffer, flags);
+    const int inputResult = checkInput(buffer, bufferSize, flags);
     if (inputResult != SPI_ALL_RIGHT) return inputResult;
     if (progress && progress(0, 1, userData) != 0) return SPI_ABORT;
 
     GifDecoder decoder;
     SusieDecodedImage image{};
     try {
-        image = decoder.decodeImage(buffer);
+        image = decoder.decodeImage(
+            buffer, bufferSize, (flags & SPI_INPUT_MEMORY) != 0
+        );
     } catch (const std::bad_alloc&) {
         return SPI_NO_MEMORY;
     } catch (const std::length_error&) {

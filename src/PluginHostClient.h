@@ -43,10 +43,14 @@ inline bool runPluginHost(
     PluginHostOperation operation,
     const std::string& imagePath,
     PluginHostReply& reply,
-    std::string& error
+    std::string& error,
+    const std::string& extra = {},
+    const std::vector<std::uint8_t>& data = {}
 ) {
     if (pluginPath.size() > std::numeric_limits<std::uint32_t>::max()
-        || imagePath.size() > std::numeric_limits<std::uint32_t>::max()) {
+        || imagePath.size() > std::numeric_limits<std::uint32_t>::max()
+        || extra.size() > std::numeric_limits<std::uint32_t>::max()
+        || data.size() > std::numeric_limits<std::uint32_t>::max()) {
         error = "Plugin or image path is too long for the compatibility host";
         return false;
     }
@@ -154,11 +158,15 @@ inline bool runPluginHost(
     request.operation = static_cast<std::uint32_t>(operation);
     request.pluginPathBytes = static_cast<std::uint32_t>(pluginPath.size());
     request.imagePathBytes = static_cast<std::uint32_t>(imagePath.size());
+    request.extraBytes = static_cast<std::uint32_t>(extra.size());
+    request.dataBytes = static_cast<std::uint32_t>(data.size());
 
     const bool requestWritten
     =   writePipe(parentInput, &request, sizeof(request))
     &&  writePipe(parentInput, pluginPath.data(), pluginPath.size())
-    &&  writePipe(parentInput, imagePath.data(), imagePath.size());
+    &&  writePipe(parentInput, imagePath.data(), imagePath.size())
+    &&  writePipe(parentInput, extra.data(), extra.size())
+    &&  writePipe(parentInput, data.data(), data.size());
 
     CloseHandle(parentInput);
 

@@ -46,73 +46,145 @@ void Viewer::present(const std::string& imagePath) {
     if (imagePath.empty()) return;
 
     std::vector<LoadedPlugin*> supportingPlugins = pm.getSupportingPlugins(imagePath);
+    bool imageFromArchive = false;
+    DecodedImage archiveImage;
     if (supportingPlugins.empty()) {
-        const std::string message = "No installed image plugin supports this file:\n"
-            + imagePath;
-        if (!SDL_ShowSimpleMessageBox(
-                SDL_MESSAGEBOX_WARNING,
-                "Unsupported image",
-                message.c_str(),
-                app->ui().toolbarWindow()
-            )) {
-            SDL_LogError(
-                SDL_LOG_CATEGORY_APPLICATION,
-                "Could not show unsupported-image message: %s",
-                SDL_GetError()
-            );
-        }
-        return;
-    }
-
-    const std::string extension = normalizeExtension(std::filesystem::path(imagePath).extension().string());
-    LoadedPlugin* selectedPlugin = nullptr;
-    const std::string preferredPlugin = decoderPreference(extension);
-    if (!preferredPlugin.empty()) {
-        const auto preferred = std::find_if(
-            supportingPlugins.begin(),
-            supportingPlugins.end(),
-            [&](const LoadedPlugin* plugin) {
-                return pluginIdentifier(*plugin) == preferredPlugin;
+        std::vector<LoadedPlugin*> archivePlugins = pm.getSupportingArchivePlugins(imagePath);
+        if (archivePlugins.empty()) {
+            const std::string message = "No installed image or archive plugin supports this file:\n"
+                + imagePath;
+            if (!SDL_ShowSimpleMessageBox(
+                    SDL_MESSAGEBOX_WARNING,
+                    "Unsupported image",
+                    message.c_str(),
+                    app->ui().toolbarWindow()
+                )) {
+                SDL_LogError(
+                    SDL_LOG_CATEGORY_APPLICATION,
+                    "Could not show unsupported-image message: %s",
+                    SDL_GetError()
+                );
             }
-        );
-        if (preferred != supportingPlugins.end()) {
-            selectedPlugin = *preferred;
-        } else {
-            setDecoderPreference(extension, "");
+            return;
         }
-    }
 
-    if (!selectedPlugin && supportingPlugins.size() > 1) {
-        if (!nativeMenu) {
-            SDL_LogError(
-                SDL_LOG_CATEGORY_APPLICATION,
-                "Could not choose an image decoder because the application menu is unavailable"
+        LoadedPlugin* archivePlugin = archivePlugins.front();
+        if (archivePlugins.size() > 1) {
+            std::vector<std::string> labels;
+            labels.reserve(archivePlugins.size());
+            for (const LoadedPlugin* plugin : archivePlugins) {
+                labels.push_back(plugin->name);
+            }
+            const std::optional<std::size_t> choice = nativeMenu
+                ? nativeMenu->chooseOption(labels)
+                : std::nullopt;
+            if (!choice || *choice >= archivePlugins.size()) return;
+            archivePlugin = archivePlugins[*choice];
+        }
+
+        std::vector<SusieArchiveEntry> archiveEntries;
+        if (!pm.getArchiveEntries(archivePlugin, imagePath, archiveEntries)) return;
+        const auto imageDecoders = pm.getDeclaredPluginsByExtension();
+        std::vector<std::string> imageEntries;
+        for (const SusieArchiveEntry& entry : archiveEntries) {
+            if (entry.filename.empty()) continue;
+            std::string entryName = entry.path;
+            if (!entryName.empty() && entryName.back() != '/'
+            &&  entryName.back() != '\\') {
+                entryName.push_back('/');
+            }
+            entryName += entry.filename;
+            std::replace(entryName.begin(), entryName.end(), '\\', '/');
+            const std::string extension = normalizeExtension(
+                std::filesystem::path(entryName).extension().string()
+            );
+            if (imageDecoders.find(extension) != imageDecoders.end()) {
+                imageEntries.push_back(std::move(entryName));
+            }
+        }
+        if (imageEntries.empty()) {
+            SDL_ShowSimpleMessageBox(
+                SDL_MESSAGEBOX_WARNING,
+                "Empty archive",
+                "The archive does not contain files supported by an installed image plugin.",
+                app->ui().toolbarWindow()
             );
             return;
         }
 
-        std::vector<std::string> labels;
-        labels.reserve(supportingPlugins.size());
-        for (const LoadedPlugin* plugin : supportingPlugins) {
-            std::string label = plugin->name;
-            const std::string identifier = pluginIdentifier(*plugin);
-            if (std::count_if(
-                    supportingPlugins.begin(),
-                    supportingPlugins.end(),
-                    [&](const LoadedPlugin* candidate) {
-                        return candidate->name == plugin->name;
-                    }
-                ) > 1) {
-                label += " (" + identifier + ")";
-            }
-            labels.push_back(std::move(label));
+        std::size_t selectedEntry = 0;
+        if (imageEntries.size() > 1) {
+            const std::optional<std::size_t> choice = nativeMenu
+                ? nativeMenu->chooseOption(imageEntries)
+                : std::nullopt;
+            if (!choice || *choice >= imageEntries.size()) return;
+            selectedEntry = *choice;
         }
-        const std::optional<std::size_t> choice = nativeMenu->chooseOption(labels);
-        if (!choice || *choice >= supportingPlugins.size()) return;
-        selectedPlugin = supportingPlugins[*choice];
-        setDecoderPreference(extension, pluginIdentifier(*selectedPlugin));
-    } else if (!selectedPlugin) {
-        selectedPlugin = supportingPlugins.front();
+
+        if (!pm.decodeArchiveEntry(
+                imagePath,
+                imageEntries[selectedEntry],
+                archiveImage,
+                archivePlugin
+            )) {
+            std::cerr << "Could not decode archive image: "
+                      << imageEntries[selectedEntry] << " from " << imagePath << "\n";
+            return;
+        }
+        imageFromArchive = true;
+    }
+
+    const std::string extension = normalizeExtension(std::filesystem::path(imagePath).extension().string());
+    LoadedPlugin* selectedPlugin = nullptr;
+    if (!imageFromArchive) {
+        const std::string preferredPlugin = decoderPreference(extension);
+        if (!preferredPlugin.empty()) {
+            const auto preferred = std::find_if(
+                supportingPlugins.begin(),
+                supportingPlugins.end(),
+                [&](const LoadedPlugin* plugin) {
+                    return pluginIdentifier(*plugin) == preferredPlugin;
+                }
+            );
+            if (preferred != supportingPlugins.end()) {
+                selectedPlugin = *preferred;
+            } else {
+                setDecoderPreference(extension, "");
+            }
+        }
+
+        if (!selectedPlugin && supportingPlugins.size() > 1) {
+            if (!nativeMenu) {
+                SDL_LogError(
+                    SDL_LOG_CATEGORY_APPLICATION,
+                    "Could not choose an image decoder because the application menu is unavailable"
+                );
+                return;
+            }
+
+            std::vector<std::string> labels;
+            labels.reserve(supportingPlugins.size());
+            for (const LoadedPlugin* plugin : supportingPlugins) {
+                std::string label = plugin->name;
+                const std::string identifier = pluginIdentifier(*plugin);
+                if (std::count_if(
+                        supportingPlugins.begin(),
+                        supportingPlugins.end(),
+                        [&](const LoadedPlugin* candidate) {
+                            return candidate->name == plugin->name;
+                        }
+                    ) > 1) {
+                    label += " (" + identifier + ")";
+                }
+                labels.push_back(std::move(label));
+            }
+            const std::optional<std::size_t> choice = nativeMenu->chooseOption(labels);
+            if (!choice || *choice >= supportingPlugins.size()) return;
+            selectedPlugin = supportingPlugins[*choice];
+            setDecoderPreference(extension, pluginIdentifier(*selectedPlugin));
+        } else if (!selectedPlugin) {
+            selectedPlugin = supportingPlugins.front();
+        }
     }
 
     if (!app->ui().viewerRenderer()) {
@@ -123,8 +195,9 @@ void Viewer::present(const std::string& imagePath) {
     PluginAnimation nextAnimation;
     DecodedImage firstFrame;
     std::uint32_t firstFrameDurationMs = 0;
-    bool loaded = false;
-    if (pm.openAnimation(imagePath, nextAnimation, selectedPlugin)
+    bool loaded = imageFromArchive && createTextureFromImage(archiveImage);
+    if (!imageFromArchive
+    &&  pm.openAnimation(imagePath, nextAnimation, selectedPlugin)
     &&  pm.decodeAnimationFrame(nextAnimation, 0, firstFrame, firstFrameDurationMs)
     &&  createTextureFromImage(firstFrame)
     ) {
@@ -147,7 +220,7 @@ void Viewer::present(const std::string& imagePath) {
     }
 
     pm.closeAnimation(nextAnimation);
-    if (!loaded && loadStaticImage(imagePath, selectedPlugin)) {
+    if (!imageFromArchive && !loaded && loadStaticImage(imagePath, selectedPlugin)) {
         clearAnimation();
         loaded = true;
     }
@@ -159,6 +232,14 @@ void Viewer::present(const std::string& imagePath) {
             << "\n";
 
         return;
+    }
+
+    if (imageFromArchive) {
+        clearAnimation();
+        currentImageMetadata = std::move(archiveImage.metadata);
+        app->ui().resizeViewer(
+            archiveImage.width, archiveImage.height + ViewerTitleBarHeight
+        );
     }
 
     zoom = viewerSettings.resetZoomOnOpen ? 1.0f : zoom;
