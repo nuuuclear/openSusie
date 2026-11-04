@@ -4,7 +4,7 @@ An Open Source reimplentation of [Graphic Viewer Susie](https://www.digitalpad.c
 
 This is made to support newer hardware and OS as the original is quite outdated, it adds zooming, panning, and better window sizing. The original only supports windows, and here the goal is to support as many platforms as needed.
 
-Currently has built-in plugins: stb_image (png, jpeg, and bmp), qoi, and gif.
+Currently has built-in plugins: stb_image (png, jpeg, and bmp), qoi, pnm, and gif.
 
 The plugin format has been extended to support animated images such as GIFs, and will have further features added to it.
 
