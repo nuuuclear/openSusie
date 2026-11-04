@@ -51,6 +51,8 @@ public:
     void fitToWindow();
     void rotateLeft();
     void rotateRight();
+    void flipX();
+    void flipY();
     void showInformation() const;
     void openFileDialog();
     const std::vector<std::string>& getRecentFiles() const;

@@ -298,6 +298,14 @@ void Viewer::zoomOut() {
     zoomBy(1.0f / zoomFactor);
 }
 
+void Viewer::flipX() {
+
+}
+
+void Viewer::flipY() {
+    
+}
+
 void Viewer::fitToWindow() {
     resetView();
 }
@@ -382,10 +390,7 @@ std::string Viewer::decoderPreference(const std::string& extension) const {
     return preference == decoderPreferences.end() ? std::string{} : preference->second;
 }
 
-void Viewer::setDecoderPreference(
-    const std::string& extension,
-    const std::string& pluginId
-) {
+void Viewer::setDecoderPreference(const std::string& extension, const std::string& pluginId) {
     const std::string normalized = normalizeExtension(extension);
     if (normalized.empty()) {
         SDL_LogError(
@@ -474,22 +479,6 @@ void Viewer::loadSettings() {
     std::filesystem::path settingsFileToLoad = settingsPath;
     std::error_code fileError;
     bool settingsExist = std::filesystem::exists(settingsFileToLoad, fileError);
-    if (!settingsExist && !fileError) {
-        char* legacyPreferencePath = SDL_GetPrefPath("imagr", "imagr");
-        if (!legacyPreferencePath) {
-            SDL_LogWarn(
-                SDL_LOG_CATEGORY_APPLICATION,
-                "Could not locate legacy settings directory: %s",
-                SDL_GetError()
-            );
-
-        } else {
-            const auto legacySettingsPath = std::filesystem::path(legacyPreferencePath) / "settings.ini";
-            SDL_free(legacyPreferencePath);
-            settingsFileToLoad = legacySettingsPath;
-            settingsExist = std::filesystem::exists(settingsFileToLoad, fileError);
-        }
-    }
 
     if (fileError) {
         SDL_LogWarn(

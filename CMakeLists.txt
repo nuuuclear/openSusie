@@ -173,6 +173,10 @@ add_executable(openSusie
     "src/FileSystem.cpp"
     "src/FileSystem.h"
     "src/Subroutine.h"
+    "src/Button.cpp"
+    "src/Button.h"
+    "src/ButtonPanel.cpp"
+    "src/ButtonPanel.h"
 )
 
 target_link_libraries(openSusie PRIVATE

@@ -4,18 +4,73 @@
 #include "NativeMenu.h"
 #include "Paths.h"
 #include "Viewer.h"
+#include "Button.h"
 
 namespace {
-constexpr int ButtonY[] = {0, 24, 48, 72, 96, 120, 144, 168};
-constexpr int ButtonHeights[] = {24, 24, 24, 24, 24, 24, 24, 16};
-constexpr int ButtonOffsetY = ToolbarTitleBarHeight;
-}
+struct ButtonDefinition {
+	const char* tooltip;
+	int action;
+	int spriteY;
+	int width;
+	int height;
+};
+
+constexpr ButtonDefinition ButtonDefinitions[] = {
+	{   "Open file",
+        0,
+        0, 
+        32, 24
+    },
+	{   "Close image",
+        1,
+        24,
+        32, 24
+    },
+	{   "Rotate left",
+        2,
+        48,
+        32, 24
+    },
+	{   "Rotate right",
+        3,
+        72,
+        32, 24
+    },
+	{   "Flip image",
+        4,
+        96,
+        32, 24
+    },
+	{   "Fit to window",
+        5,
+        120,
+        32, 24
+    },
+	{   "Image information",
+        6,
+        144,
+        32, 24
+    },
+	{   "Menu",
+        7,
+        168,
+        32, 16
+    }
+};
+} // namespace
 
 ButtonsWindow::ButtonsWindow(App* app, Viewer* imageViewer, NativeMenu* nativeMenu)
 :   Subroutine(app),
     viewer(imageViewer),
-    menu(nativeMenu
-) {
+    menu(nativeMenu),
+    buttons(ButtonPanelConfig{
+        .layout = ButtonLayout::Vertical,
+        .x = 0,
+        .y = ToolbarTitleBarHeight,
+        .spacing = 0,
+        .padding = 0
+    })
+{
     const auto path = app->getFileSystem().resolve(Paths::Resources, "buttons.bmp");
     SDL_Surface* surface = SDL_LoadBMP(path.string().c_str());
     if (!surface) {
@@ -45,6 +100,22 @@ ButtonsWindow::ButtonsWindow(App* app, Viewer* imageViewer, NativeMenu* nativeMe
     }
 
     SDL_DestroySurface(surface);
+
+    for (const auto& definition : ButtonDefinitions) {
+        buttons.addButton(Button(
+            definition.tooltip,
+            definition.action,
+            ButtonSprite{
+                .x = 0,
+                .y = definition.spriteY,
+                .width = definition.width,
+                .height = definition.height,
+                .hoverOffsetX = 32
+            }
+        ));
+    }
+
+    buttons.setup();
 }
 
 ButtonsWindow::~ButtonsWindow() {
@@ -52,119 +123,91 @@ ButtonsWindow::~ButtonsWindow() {
 }
 
 void ButtonsWindow::event(const SDL_Event& event) {
-    const SDL_WindowID buttonsWindowID = SDL_GetWindowID(app->ui().toolbarWindow());
+	const SDL_WindowID buttonsWindowID = SDL_GetWindowID(app->ui().toolbarWindow());
 
-    int titlebarX = 0;
-    int titlebarY = 0;
-    switch (app->ui().consumeTitlebarAction(UI::Window::Toolbar, &titlebarX, &titlebarY)) {
-        case UI::Action::Close:
-            app->quit();
-            return;
+	int titlebarX = 0;
+	int titlebarY = 0;
 
-        case UI::Action::ShowMenu:
-            menu->show(app->ui().toolbarWindow(), titlebarX, titlebarY);
-            return;
+	switch (app->ui().consumeTitlebarAction(UI::Window::Toolbar, &titlebarX, &titlebarY)) {
+		case UI::Action::Close:
+			app->quit();
+			return;
 
-        case UI::Action::Minimize:
-        case UI::Action::ToggleMaximize:
-        case UI::Action::None:
-            break;
-    }
+		case UI::Action::ShowMenu:
+			menu->show(app->ui().toolbarWindow(), titlebarX, titlebarY);
+			return;
 
-    if (event.type == SDL_EVENT_WINDOW_MOUSE_LEAVE
+		case UI::Action::Minimize:
+		case UI::Action::ToggleMaximize:
+		case UI::Action::None:
+			break;
+	}
+
+	if (event.type == SDL_EVENT_WINDOW_MOUSE_LEAVE
     &&  event.window.windowID == buttonsWindowID
     ) {
-        for (bool& hover : hovering) {
-            hover = false;
-        }
-        return;
-    }
+		buttons.clearHover();
+		return;
+	}
 
-    if (event.type == SDL_EVENT_MOUSE_MOTION
+	if (event.type == SDL_EVENT_MOUSE_MOTION
     &&  event.motion.windowID == buttonsWindowID
     ) {
-        for (size_t i = 0; i < buttonCount; ++i) {
-            hovering[i] 
-            =   event.motion.x >= 0
-            &&  event.motion.x < buttonWidth
-            &&  event.motion.y >= ButtonOffsetY + ButtonY[i]
-            &&  event.motion.y < ButtonOffsetY + ButtonY[i] + ButtonHeights[i];
-        }
+		buttons.updateHover(event.motion.x, event.motion.y);
+		return;
+	}
 
-        return;
-    }
-
-    if (event.type == SDL_EVENT_MOUSE_BUTTON_UP
+	if (event.type == SDL_EVENT_MOUSE_BUTTON_UP
     &&  event.button.windowID == buttonsWindowID
     &&  event.button.button == SDL_BUTTON_LEFT
     ) {
-        const float x = event.button.x;
-        const float y = event.button.y;
+		Button* button = buttons.hitTest(event.button.x, event.button.y);
 
-        for (size_t i = 0; i < buttonCount; ++i) {
-            if (x >= 0 && x < buttonWidth
-            &&  y >= ButtonOffsetY + ButtonY[i]
-            &&  y < ButtonOffsetY + ButtonY[i] + ButtonHeights[i]
-            ) {
-                activateButton(i);
-                return;
-            }
-        }
-    }
+		if (button) {
+			activateButton(*button);
+		}
+	}
 }
 
 void ButtonsWindow::draw() {
-    SDL_Renderer* renderer = app->ui().toolbarRenderer();
-    if (!renderer) return;
+	SDL_Renderer* renderer = app->ui().toolbarRenderer();
+	if (!renderer) return;
 
-    app->ui().drawToolbarTitlebar();
-    if (!buttonTexture) return;
-    for (size_t i = 0; i < buttonCount; ++i) {
-        const SDL_FRect source{
-            hovering[i] ? static_cast<float>(buttonWidth) : 0.0f,
-            static_cast<float>(ButtonY[i]),
-            static_cast<float>(buttonWidth),
-            static_cast<float>(ButtonHeights[i])
-        };
-        const SDL_FRect destination{
-            0.0f,
-            static_cast<float>(ButtonOffsetY + ButtonY[i]),
-            static_cast<float>(buttonWidth),
-            static_cast<float>(ButtonHeights[i])
-        };
-        SDL_RenderTexture(renderer, buttonTexture, &source, &destination);
-    }
+	app->ui().drawToolbarTitlebar();
+	if (!buttonTexture) return;
+
+	buttons.draw(renderer, buttonTexture);
 }
 
-void ButtonsWindow::activateButton(size_t index) {
-    switch (index) {
-        case 0:
-            viewer->openFileDialog();
-            break;
-        case 1:
-            viewer->closeImage();
-            break;
-        case 2:
-            viewer->rotateLeft();
-            break;
-        case 3:
-            viewer->rotateRight();
-            break;
-        case 4:
-            viewer->zoomIn();
-            break;
-        case 5:
-            viewer->zoomOut();
-            break;
-        case 6:
-            viewer->showInformation();
-            break;
-        case 7:
+void ButtonsWindow::activateButton(const Button& button) {
+	switch (button.getAction()) {
+		case 0:
+			viewer->openFileDialog();
+			break;
+		case 1:
+			viewer->closeImage();
+			break;
+		case 2:
+			viewer->rotateLeft();
+			break;
+		case 3:
+			viewer->rotateRight();
+			break;
+		case 4:
+			// Flip image
+			break;
+		case 5:
+			viewer->fitToWindow();
+			break;
+		case 6:
+			viewer->showInformation();
+			break;
+		case 7:
             menu->show(
                 app->ui().toolbarWindow(),
-                buttonWidth,
-                ButtonOffsetY + ButtonY[7]
+                32,
+                button.getY() + button.getHeight()
             );
             break;
-    }
+	}
 }
