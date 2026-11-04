@@ -120,7 +120,14 @@ endfunction()
 add_subdirectory(plugins/stb)
 add_subdirectory(plugins/qoi)
 add_subdirectory(plugins/gif)
-foreach(plugin IN ITEMS stb qoi gif)
+add_subdirectory(plugins/pixelmap)
+foreach(
+    plugin IN ITEMS 
+        stb
+        qoi
+        gif
+        pnm
+)
     openSusie_configure_size_optimizations(openSusie_${plugin})
 endforeach()
 
@@ -180,9 +187,9 @@ add_executable(openSusie
 )
 
 target_link_libraries(openSusie PRIVATE
-    SDL3::SDL3 
+    SDL3::SDL3
     nlohmann_json::nlohmann_json
-    inicpp 
+    inicpp
     openSusie_susie_sdk
 )
 openSusie_configure_size_optimizations(openSusie)
@@ -239,7 +246,12 @@ add_custom_target(openSusie_copy_resources
     COMMENT "Copying resources to build directory"
     VERBATIM
 )
-add_dependencies(openSusie openSusie_copy_resources openSusie_stb openSusie_qoi openSusie_gif)
+add_dependencies(openSusie
+    openSusie_copy_resources
+    openSusie_stb
+    openSusie_qoi
+    openSusie_pnm
+)
 
 # install rules
 
