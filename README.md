@@ -1,6 +1,6 @@
 ![openSusie logo](./resources/BMTITLE.bmp)
 
-An Open Source reimplentation of [Graphic Viewer Susie](https://www.digitalpad.co.jp/~takechin/).
+openSusie is a plugin supported grapics viewer, based on [Susie](https://www.digitalpad.co.jp/~takechin/).
 
 This is made to support newer hardware and OS as the original is quite outdated, it adds zooming, panning, and better window sizing. The original only supports windows, and here the goal is to support as many platforms as needed.
 
