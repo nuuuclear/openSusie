@@ -48,7 +48,7 @@ bool UI::initialize(const std::string& title, int viewerWidth, int viewerHeight,
     toolbar.window = SDL_CreateWindow(
         "openSusie toolbar",
         32,
-        ToolbarTitleBarHeight + 184,
+        ToolbarTitleBarHeight + 208,
         SDL_WINDOW_BORDERLESS | SDL_WINDOW_UTILITY
     );
 

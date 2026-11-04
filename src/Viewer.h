@@ -97,6 +97,9 @@ private:
     std::string currentImageMetadata;
     double rotationDegrees = 0.0;
 
+    bool imageFlipX = false;
+    bool imageFlipY = false;
+
     float imageX = 0.0f;
     float imageY = 0.0f;
 

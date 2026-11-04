@@ -18,17 +18,25 @@ namespace {
 constexpr Sint32 OpenFileEventCode = 0x494D4147;
 
 std::string normalizeExtension(std::string extension) {
-    if (!extension.empty() && extension.front() == '.') extension.erase(0, 1);
-    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
+    if (!extension.empty() && extension.front() == '.')
+        extension.erase(0, 1);
+    
+    std::transform(
+        extension.begin(),
+        extension.end(),
+        extension.begin(),
+        [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+        }
+    );
+    
     return extension;
 }
 
 std::string pluginIdentifier(const LoadedPlugin& plugin) {
     return std::filesystem::path(plugin.path).filename().string();
 }
-}
+} // namespace
 
 Viewer::Viewer(App* app) : Subroutine(app) {
     loadSettings();
@@ -48,24 +56,20 @@ void Viewer::present(const std::string& imagePath) {
     std::vector<LoadedPlugin*> supportingPlugins = pm.getSupportingPlugins(imagePath);
     bool imageFromArchive = false;
     DecodedImage archiveImage;
+
     if (supportingPlugins.empty()) {
         std::vector<LoadedPlugin*> archivePlugins = pm.getSupportingArchivePlugins(imagePath);
         if (archivePlugins.empty()) {
-            const std::string message = "No installed image or archive plugin supports this file:\n"
-                + imagePath;
-            if (!SDL_ShowSimpleMessageBox(
-                    SDL_MESSAGEBOX_WARNING,
-                    "Unsupported image",
-                    message.c_str(),
-                    app->ui().toolbarWindow()
-                )
-            ) {
-                SDL_LogError(
-                    SDL_LOG_CATEGORY_APPLICATION,
-                    "Could not show unsupported-image message: %s",
-                    SDL_GetError()
-                );
-            }
+            const std::string message
+            =   "No installed image or archive plugin supports this file:\n"
+            +   imagePath;
+
+            SDL_ShowSimpleMessageBox(
+                SDL_MESSAGEBOX_WARNING,
+                "Unsupported image",
+                message.c_str(),
+                app->ui().toolbarWindow()
+            );
 
             return;
         }
@@ -78,9 +82,11 @@ void Viewer::present(const std::string& imagePath) {
                 labels.push_back(plugin->name);
             }
 
-            const std::optional<std::size_t> choice = nativeMenu
-                ? nativeMenu->chooseOption(labels)
-                : std::nullopt;
+            const std::optional<std::size_t> choice
+            =   nativeMenu
+            ?   nativeMenu->chooseOption(labels)
+            :   std::nullopt;
+
             if (!choice || *choice >= archivePlugins.size()) return;
             archivePlugin = archivePlugins[*choice];
         }
@@ -122,9 +128,11 @@ void Viewer::present(const std::string& imagePath) {
 
         std::size_t selectedEntry = 0;
         if (imageEntries.size() > 1) {
-            const std::optional<std::size_t> choice = nativeMenu
-                ? nativeMenu->chooseOption(imageEntries)
-                : std::nullopt;
+            const std::optional<std::size_t> choice
+            =   nativeMenu
+            ?   nativeMenu->chooseOption(imageEntries)
+            :   std::nullopt;
+
             if (!choice || *choice >= imageEntries.size()) return;
             selectedEntry = *choice;
         }
@@ -258,6 +266,9 @@ void Viewer::present(const std::string& imagePath) {
 
     zoom = viewerSettings.resetZoomOnOpen ? 1.0f : zoom;
     rotationDegrees = 0.0;
+    imageFlipX = false;
+    imageFlipY = false;
+
     currentImagePath = imagePath;
     rememberFile(imagePath);
 
@@ -299,11 +310,11 @@ void Viewer::zoomOut() {
 }
 
 void Viewer::flipX() {
-
+    imageFlipX =! imageFlipX;
 }
 
 void Viewer::flipY() {
-    
+    imageFlipY =! imageFlipY;
 }
 
 void Viewer::fitToWindow() {
@@ -343,6 +354,7 @@ void Viewer::showInformation() const {
         message << "\n" << currentImageMetadata;
     }
 
+    // TODO: this should be an actual dialog, not a message
     if (!SDL_ShowSimpleMessageBox(
         SDL_MESSAGEBOX_INFORMATION,
         "Image information",
@@ -418,9 +430,11 @@ void Viewer::setInterpolation(Interpolation interpolation) {
     if (viewerSettings.interpolation == interpolation) return;
     viewerSettings.interpolation = interpolation;
     if (texture) {
-        const SDL_ScaleMode mode = interpolation == Interpolation::Nearest
-            ? SDL_SCALEMODE_NEAREST
-            : SDL_SCALEMODE_LINEAR;
+        const SDL_ScaleMode mode
+        =   interpolation == Interpolation::Nearest
+        ?   SDL_SCALEMODE_NEAREST
+        :   SDL_SCALEMODE_LINEAR;
+        
         if (!SDL_SetTextureScaleMode(texture, mode)) {
             SDL_LogError(
                 SDL_LOG_CATEGORY_APPLICATION,
@@ -495,8 +509,7 @@ void Viewer::loadSettings() {
 
     try {
         const inih::INIReader config(settingsFileToLoad.string());
-        const std::string interpolation =
-            config.Get("viewer", "interpolation", std::string("linear"));
+        const std::string interpolation = config.Get("viewer", "interpolation", std::string("linear"));
         if (interpolation == "nearest") {
             viewerSettings.interpolation = Interpolation::Nearest;
         } else if (interpolation == "linear") {
@@ -623,6 +636,8 @@ void SDLCALL Viewer::openFileCallback(void* userdata, const char* const* filelis
 }
 
 void Viewer::rememberFile(const std::string& imagePath) {
+    // TODO: save these to the disk
+
     recentFiles.erase(
         std::remove(recentFiles.begin(), recentFiles.end(), imagePath),
         recentFiles.end()
@@ -948,6 +963,16 @@ void Viewer::draw() {
             SDL_RenderFillRect(renderer, nullptr);
         }
 
+        SDL_FlipMode flipmode = SDL_FLIP_NONE;
+
+        if (imageFlipX && imageFlipY) {
+            flipmode = SDL_FLIP_HORIZONTAL_AND_VERTICAL;
+        } else if (imageFlipX) {
+            flipmode = SDL_FLIP_HORIZONTAL;
+        } else if (imageFlipY) {
+            flipmode = SDL_FLIP_VERTICAL;
+        }
+
         SDL_RenderTextureRotated(
             renderer,
             texture,
@@ -955,7 +980,7 @@ void Viewer::draw() {
             &destRect,
             rotationDegrees,
             nullptr,
-            SDL_FLIP_NONE
+            flipmode
         );
 
         SDL_SetRenderClipRect(renderer, nullptr);

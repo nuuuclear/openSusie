@@ -35,12 +35,18 @@
           "action": "rotate_right"
         },
         {
+          "type": "separator"
+        },
+        {
           "label": "Flip vertical",
           "action": "flip_vert"
         },
         {
           "label": "Flip horizontal",
           "action": "flip_hori"
+        },
+        {
+          "type": "separator"
         },
         {
           "label": "Bigger",

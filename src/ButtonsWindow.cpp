@@ -36,24 +36,29 @@ constexpr ButtonDefinition ButtonDefinitions[] = {
         72,
         32, 24
     },
-	{   "Flip image",
+	{   "Flip image vertically",
         4,
         96,
         32, 24
     },
-	{   "Fit to window",
+    {   "Flip image horizontally",
         5,
         120,
         32, 24
     },
-	{   "Image information",
+	{   "Fit to window",
         6,
         144,
         32, 24
     },
-	{   "Menu",
+	{   "Image information",
         7,
         168,
+        32, 24
+    },
+	{   "Menu",
+        8,
+        192,
         32, 16
     }
 };
@@ -194,15 +199,18 @@ void ButtonsWindow::activateButton(const Button& button) {
 			viewer->rotateRight();
 			break;
 		case 4:
-			// Flip image
+			viewer->flipX();
 			break;
-		case 5:
-			viewer->fitToWindow();
+        case 5:
+			viewer->flipY();
 			break;
 		case 6:
-			viewer->showInformation();
+			viewer->fitToWindow();
 			break;
 		case 7:
+			viewer->showInformation();
+			break;
+		case 8:
             menu->show(
                 app->ui().toolbarWindow(),
                 32,

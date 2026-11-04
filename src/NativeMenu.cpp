@@ -71,12 +71,14 @@ bool requiresImage(const std::string& action) {
     return action == "close"
         || action == "rotate_left"
         || action == "rotate_right"
+        || action == "flip_vert"
+        || action == "flip_hori"
         || action == "zoom_in"
         || action == "zoom_out"
         || action == "information"
         || action == "fit";
 }
-}
+} // namespace
 
 NativeMenu::NativeMenu(App* parentApp, Viewer* imageViewer)
     : app(parentApp), viewer(imageViewer) {
@@ -84,8 +86,8 @@ NativeMenu::NativeMenu(App* parentApp, Viewer* imageViewer)
 }
 
 void NativeMenu::loadItems() {
-    const std::string menuPath =
-        app->getFileSystem().resolve(Paths::Resources, "menu.json").string();
+    const std::string menuPath = app->getFileSystem().resolve(Paths::Resources, "menu.json").string();
+    
     size_t fileSize = 0;
     void* fileData = SDL_LoadFile(menuPath.c_str(), &fileSize);
     if (!fileData) {
@@ -401,6 +403,12 @@ void NativeMenu::activate(int id) {
 
     } else if (action == "rotate_right") {
         viewer->rotateRight();
+
+    } else if (action == "flip_vert") {
+        viewer->flipY();
+
+    } else if (action == "flip_hori") {
+        viewer->flipX();
 
     } else if (action == "zoom_in") {
         viewer->zoomIn();
