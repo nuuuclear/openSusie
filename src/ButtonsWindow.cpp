@@ -172,6 +172,16 @@ void ButtonsWindow::event(const SDL_Event& event) {
 			activateButton(*button);
 		}
 	}
+
+    if (event.type == SDL_EVENT_DROP_FILE
+    &&  event.drop.windowID == buttonsWindowID
+    ) {
+        if (event.drop.data != NULL) {
+            std::string dropped_file(event.drop.data);
+
+            viewer->present(dropped_file);
+        }
+    }
 }
 
 void ButtonsWindow::draw() {

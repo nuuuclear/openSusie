@@ -150,6 +150,7 @@ void App::step() {
                 running = false;
                 break;
 
+            // TODO: add a toggle in settings for this
             case SDL_EVENT_KEY_DOWN:
                 if (queuedEvent.key.key == SDLK_ESCAPE) {
                     running = false;

@@ -214,6 +214,7 @@ void UI::handleEvent(const SDL_Event& event) {
             }
 
             break;
+
         default:
             break;
     }

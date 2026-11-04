@@ -202,10 +202,12 @@ public:
                     archivePath,
                     reply,
                     error
-                )) {
+                )
+            ) {
                 std::cerr << "<Plugins> ERROR: " << error << "\n";
                 return false;
             }
+
             if (reply.header.status != 0) {
                 std::cerr << "<Plugins> ERROR: 32-bit archive plugin could not list archive "
                           << archivePath << "\n";
@@ -260,6 +262,7 @@ public:
 
         HLOCAL info = nullptr;
         int result = SPI_NO_FUNCTION;
+        
         if (plugin->getArchiveInfoW) {
             result = plugin->getArchiveInfoW(
                 widePath.c_str(), 0, SPI_INPUT_FILE, &info
