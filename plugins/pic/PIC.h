@@ -207,7 +207,12 @@ namespace PICDecode {
 				if (format.colorBits != 16)
 					return false;
 
+				// stores two palette indices in each 16-bit value for Tiled PC-88VA data
 				format.tiled = true;
+				format.cached = false;
+				format.indexed = false;
+				if (pixelCount > 50000000)
+					return false;
 			}
 
 			if (format.colorBits == 8) {
@@ -398,18 +403,17 @@ namespace PICDecode {
 	}
 
 	inline bool readPalette(Bits& bits, const Format& format, std::vector<uint32_t>& palette) {
-		if (!format.indexed)
+		if (!format.indexed && !format.tiled)
 			return true;
 
-		if (format.colorBits < 1 || format.colorBits > 8)
+		const uint32_t count = format.tiled ? 256u : (1u << format.colorBits);
+		if (!format.tiled && (format.colorBits < 1 || format.colorBits > 8))
 			return false;
 
-		const uint32_t count = 1u << format.colorBits;
 		palette.resize(count);
 
-		for (uint32_t i = 0; i < count; ++i) {
+		for (uint32_t i = 0; i < count; ++i)
 			palette[i] = readRGB(bits, format);
-		}
 
 		return true;
 	}
@@ -419,6 +423,9 @@ namespace PICDecode {
 		const Format& format,
 		ColorCache& cache
 	) {
+		if (format.tiled)
+			return bits.read(16);
+
 		if (format.cached && bits.read(1))
 			return cache.get(int(bits.read(7)));
 
@@ -502,9 +509,6 @@ namespace PICDecode {
 		const Format& format,
 		std::vector<uint32_t>& pixels
 	) {
-		if (format.tiled)
-			return false;
-
 		const size_t total = size_t(format.width) * format.height;
 
 		pixels.assign(total, 0xffffffffu);
@@ -560,10 +564,11 @@ namespace PICDecode {
 		Image& output
 	) {
 		const size_t total = size_t(format.width) * format.height;
+		const size_t outputPixelCount = total * (format.tiled ? 2u : 1u);
 
 		output.width = format.width;
-		output.height = format.height;
-		output.pixels.resize(total * 4);
+		output.height = format.height * (format.tiled ? 2u : 1u);
+		output.pixels.resize(outputPixelCount * 4);
 
 		const uint32_t paletteMask = format.indexed
 			? uint32_t(palette.size() - 1)
@@ -571,18 +576,40 @@ namespace PICDecode {
 
 		uint32_t previous = 0;
 
-		for (size_t i = 0, offset = 0; i < total; ++i) {
+		for (size_t i = 0; i < total; ++i) {
 			if (source[i] != 0xffffffffu)
 				previous = source[i];
+
+			if (format.tiled) {
+				if (palette.size() != 256)
+					throw std::runtime_error("invalid tile palette");
+
+				const uint32_t first = palette[previous & 0xff];
+				const uint32_t second = palette[(previous >> 8) & 0xff];
+				const size_t firstOffset = (i * 2) * 4;
+				const size_t secondOffset = firstOffset + 4;
+
+				output.pixels[firstOffset] = uint8_t(first >> 16);
+				output.pixels[firstOffset + 1] = uint8_t(first >> 8);
+				output.pixels[firstOffset + 2] = uint8_t(first);
+				output.pixels[firstOffset + 3] = 255;
+
+				output.pixels[secondOffset] = uint8_t(second >> 16);
+				output.pixels[secondOffset + 1] = uint8_t(second >> 8);
+				output.pixels[secondOffset + 2] = uint8_t(second);
+				output.pixels[secondOffset + 3] = 255;
+				continue;
+			}
 
 			const uint32_t color = format.indexed
 				? palette[previous & paletteMask]
 				: previous;
+			const size_t offset = i * 4;
 
-			output.pixels[offset++] = uint8_t(color >> 16);
-			output.pixels[offset++] = uint8_t(color >> 8);
-			output.pixels[offset++] = uint8_t(color);
-			output.pixels[offset++] = 255;
+			output.pixels[offset] = uint8_t(color >> 16);
+			output.pixels[offset + 1] = uint8_t(color >> 8);
+			output.pixels[offset + 2] = uint8_t(color);
+			output.pixels[offset + 3] = 255;
 		}
 	}
 
@@ -619,4 +646,4 @@ namespace PICDecode {
 			return false;
 		}
 	}
-}
+} // namespace PICDecode
