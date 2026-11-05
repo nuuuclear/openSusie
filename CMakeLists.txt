@@ -121,12 +121,14 @@ add_subdirectory(plugins/stb)
 add_subdirectory(plugins/qoi)
 add_subdirectory(plugins/gif)
 add_subdirectory(plugins/pixelmap)
+add_subdirectory(plugins/maki)
 foreach(
     plugin IN ITEMS 
         stb
         qoi
         gif
         pnm
+        maki
 )
     openSusie_configure_size_optimizations(openSusie_${plugin})
 endforeach()
@@ -251,6 +253,7 @@ add_dependencies(openSusie
     openSusie_stb
     openSusie_qoi
     openSusie_pnm
+    openSusie_maki
 )
 
 # install rules
