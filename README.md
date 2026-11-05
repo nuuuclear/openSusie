@@ -18,6 +18,7 @@ Existing plugins in this repository:
 - gif
 - pnm (.pgm, .ppm, .pbm, .pam, .pnm)
 - makichan (.mag, .mki, .max)
+- Yanagisawa PIC (.Pi .PIC .JPX)
 
 ## Building
 
