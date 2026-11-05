@@ -17,7 +17,7 @@ Existing plugins in this repository:
 - qoi
 - gif
 - pnm (.pgm, .ppm, .pbm, .pam, .pnm)
-- makichan (.mag, .maki, .max)
+- makichan (.mag, .mki, .max)
 
 ## Building
 
