@@ -123,6 +123,7 @@ add_subdirectory(plugins/gif)
 add_subdirectory(plugins/pixelmap)
 add_subdirectory(plugins/maki)
 add_subdirectory(plugins/pic)
+add_subdirectory(plugins/xyz)
 
 foreach(
     plugin IN ITEMS 
@@ -132,6 +133,7 @@ foreach(
         pnm
         maki
         pic
+        xyz
 )
     openSusie_configure_size_optimizations(openSusie_${plugin})
 endforeach()
@@ -258,6 +260,7 @@ add_dependencies(openSusie
     openSusie_pnm
     openSusie_maki
     openSusie_pic
+    openSusie_xyz
 )
 
 # install rules
