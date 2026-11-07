@@ -76,7 +76,9 @@ bool requiresImage(const std::string& action) {
         || action == "zoom_in"
         || action == "zoom_out"
         || action == "information"
-        || action == "fit";
+        || action == "fit"
+        || action == "save_as"
+        ;
 }
 } // namespace
 
@@ -397,6 +399,9 @@ void NativeMenu::activate(int id) {
 
     } else if (action == "close") {
         viewer->closeImage();
+
+    } else if (action == "save_as") {
+        viewer->saveImageAs();
 
     } else if (action == "rotate_left") {
         viewer->rotateLeft();

@@ -101,6 +101,11 @@ target_include_directories(inicpp INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/inicpp/"
 )
 
+add_library(stbImageWrite INTERFACE)
+target_include_directories(stbImageWrite INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/stb_image_write/"
+)
+
 # Project components
 
 add_subdirectory(pluginSDK)

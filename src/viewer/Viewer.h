@@ -46,6 +46,8 @@ public:
     void present(const std::string& imagePath);
     void closeImage();
     bool hasImage() const;
+    void saveImageAs();
+
     void zoomIn();
     void zoomOut();
     void fitToWindow();
@@ -53,16 +55,23 @@ public:
     void rotateRight();
     void flipX();
     void flipY();
+
     void showInformation() const;
     void openFileDialog();
+
     const std::vector<std::string>& getRecentFiles() const;
+
     void setNativeMenu(NativeMenu* menu);
+
     std::map<std::string, std::vector<LoadedPlugin*>> getDecoderOptions();
     std::string decoderPreference(const std::string& extension) const;
     void setDecoderPreference(const std::string& extension, const std::string& pluginId);
+
     const Settings& settings() const;
+
     void setInterpolation(Interpolation interpolation);
     void setBackground(Background background);
+
     void setZoomToCursor(bool enabled);
     void setResetZoomOnOpen(bool enabled);
     void setToolbarOnRight(bool enabled);
@@ -93,12 +102,10 @@ private:
     SDL_DialogFileFilter dialogFilters[2]{};
 
     SDL_FRect destRect{};
+
+    DecodedImage currentImage;
     std::string currentImagePath;
     std::string currentImageMetadata;
-    double rotationDegrees = 0.0;
-
-    bool imageFlipX = false;
-    bool imageFlipY = false;
 
     float imageX = 0.0f;
     float imageY = 0.0f;
@@ -124,6 +131,14 @@ private:
     float dragStartImageX = 0.0f;
     float dragStartImageY = 0.0f;
 
+    // flip
+    
+    bool imageFlipX = false;
+    bool imageFlipY = false;
+    
+    // rotation
+    double rotationDegrees = 0.0;
+    
     NativeMenu* nativeMenu = nullptr;
     std::vector<std::string> recentFiles;
     std::map<std::string, std::string> decoderPreferences;

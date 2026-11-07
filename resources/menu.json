@@ -20,6 +20,13 @@
       "type": "separator"
     },
     {
+      "label": "Save Image as PNG",
+      "action": "save_as"
+    },
+    {
+      "type": "separator"
+    },
+    {
       "label": "Fit to canvas",
       "action": "fit"
     },

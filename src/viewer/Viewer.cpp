@@ -9,10 +9,13 @@
 #include <sstream>
 #include <utility>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
+#include <ini.h>
+
 #include "app/App.h"
 #include "core/Paths.h"
 #include "ui/NativeMenu.h"
-#include "ini.h"
 
 namespace {
 constexpr Sint32 OpenFileEventCode = 0x494D4147;
@@ -258,9 +261,12 @@ void Viewer::present(const std::string& imagePath) {
 
     if (imageFromArchive) {
         clearAnimation();
-        currentImageMetadata = std::move(archiveImage.metadata);
+        currentImage = std::move(archiveImage);
+        currentImageMetadata = currentImage.metadata;
+
         app->ui().resizeViewer(
-            archiveImage.width, archiveImage.height + ViewerTitleBarHeight
+            currentImage.width,
+            currentImage.height + ViewerTitleBarHeight
         );
     }
 
@@ -292,6 +298,7 @@ void Viewer::closeImage() {
         texture = nullptr;
     }
 
+    currentImage = {};
     currentImagePath.clear();
     currentImageMetadata.clear();
     app->ui().setViewerVisible(false);
@@ -299,6 +306,52 @@ void Viewer::closeImage() {
 
 bool Viewer::hasImage() const {
     return texture != nullptr;
+}
+
+void Viewer::saveImageAs() {
+	if (currentImage.pixels.empty()) return;
+
+    std::filesystem::path outputPath(currentImagePath);
+    outputPath.replace_extension(".png");
+
+	SDL_ShowSaveFileDialog(
+		[](void* userdata, const char* const* filelist, int) {
+			auto* viewer = static_cast<Viewer*>(userdata);
+
+			if (!filelist || !filelist[0]) return;
+
+			std::filesystem::path path(filelist[0]);
+
+			if (path.extension().empty()) {
+				path.replace_extension(".png");
+			}
+
+			const DecodedImage& image = viewer->currentImage;
+
+			const int result = stbi_write_png(
+				path.string().c_str(),
+				image.width,
+				image.height,
+				4,
+				image.pixels.data(),
+				image.width * 4
+			);
+
+			if (!result) {
+				SDL_ShowSimpleMessageBox(
+					SDL_MESSAGEBOX_ERROR,
+					"Save failed",
+					"Could not save the image",
+					viewer->app->ui().viewerWindow()
+				);
+			}
+		},
+		this,
+		app->ui().viewerWindow(),
+		nullptr,
+		0,
+		outputPath.string().c_str()
+	);
 }
 
 void Viewer::zoomIn() {
@@ -652,8 +705,10 @@ bool Viewer::loadStaticImage(const std::string& imagePath, LoadedPlugin* plugin)
     if (!pm.decodeImage(imagePath, image, plugin)) return false;
     if (!createTextureFromImage(image)) return false;
 
-    currentImageMetadata = std::move(image.metadata);
-    app->ui().resizeViewer(image.width, image.height + ViewerTitleBarHeight);
+    currentImage = std::move(image);
+	currentImageMetadata = currentImage.metadata;
+
+	app->ui().resizeViewer(currentImage.width, currentImage.height + ViewerTitleBarHeight);
 
     return true;
 }
