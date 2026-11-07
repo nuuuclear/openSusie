@@ -7,24 +7,23 @@
 
 #include <SDL3/SDL.h>
 
-#include "FileSystem.h"
-#include "Subroutine.h"
-#include "UI.h"
+#include "core/FileSystem.h"
+#include "core/Subroutine.h"
+#include "ui/UI.h"
 
-struct appConfig {
+struct AppConfig {
     std::string title = "title";
 
     int windowWidth = 256;
     int windowHeight = 240;
-
 };
 
 class App {
 public:
-    App();
+    App() = default;
     ~App();
 
-    bool init(appConfig conf);
+    bool init(const AppConfig& config);
     void run(); // starts it running
     void quit();
 

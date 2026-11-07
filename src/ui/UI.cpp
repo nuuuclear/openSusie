@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
-#include "FileSystem.h"
-#include "Paths.h"
+#include "core/FileSystem.h"
+#include "core/Paths.h"
 
 UI::~UI() {
     shutdown();

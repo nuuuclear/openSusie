@@ -1,24 +1,25 @@
 ![openSusie logo](./resources/BMTITLE.bmp)
 
-openSusie is a plugin supported grapics viewer, based on [Susie](https://www.digitalpad.co.jp/~takechin/).
+openSusie is a plugin-supported graphics viewer based on [Susie](https://www.digitalpad.co.jp/~takechin/).
 
 This is made to support newer hardware and OS as the original is quite outdated, it adds zooming, panning, and better window sizing. The original only supports windows, and here the goal is to support as many platforms as needed.
 
 The plugin format has been extended to support animated images such as GIFs, and will have further features added to it.
 
-It has compatability with exsisting 32-bit susie plugins via a seperate 32-bit plugin host executable which interfaces seamlessly with the 64-bit viewer application.
+It is compatible with existing 32-bit Susie plugins through a separate 32-bit plugin host executable that interfaces with the 64-bit viewer application.
 
-Note: As of now, this is untested on mac and is only partially tested on linux, so it may not work as intended. lots of things are WIP.
+Note: macOS is untested and Linux is only partially tested, so some functionality may not work as intended.
 
 ## Plugins
 
-Existing plugins in this repository:
+Bundled plugins:
 - stb_image (png, jpeg, and bmp)
 - qoi
 - gif
 - pnm (.pgm, .ppm, .pbm, .pam, .pnm)
 - makichan (.mag, .mki, .max)
 - Yanagisawa PIC (.Pi .PIC .JPX)
+- RPG Maker XYZ
 
 ## Building
 

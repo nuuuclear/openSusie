@@ -1,9 +1,9 @@
 #include "ButtonsWindow.h"
 
-#include "App.h"
+#include "app/App.h"
 #include "NativeMenu.h"
-#include "Paths.h"
-#include "Viewer.h"
+#include "core/Paths.h"
+#include "viewer/Viewer.h"
 #include "Button.h"
 
 namespace {

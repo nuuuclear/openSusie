@@ -14,7 +14,7 @@
 #include <vector>
 #include <fstream>
 
-#include "PlatformSymbols.h"
+#include "core/PlatformSymbols.h"
 #include "PluginHostProtocol.h"
 #include "SusieImage.h"
 #include "SusiePlugin.h"

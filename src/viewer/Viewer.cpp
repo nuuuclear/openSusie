@@ -9,9 +9,9 @@
 #include <sstream>
 #include <utility>
 
-#include "App.h"
-#include "NativeMenu.h"
-#include "Paths.h"
+#include "app/App.h"
+#include "core/Paths.h"
+#include "ui/NativeMenu.h"
 #include "ini.h"
 
 namespace {

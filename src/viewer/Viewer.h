@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "Subroutine.h"
-#include "PluginManager.h"
+#include "core/Subroutine.h"
+#include "plugin/PluginManager.h"
 
 class App;
 class PluginManager;

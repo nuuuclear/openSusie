@@ -1,24 +1,21 @@
 #define SDL_MAIN_HANDLED
 #include <SDL3/SDL.h>
 
-#include "App.h"
-#include "PluginManager.h"
-#include "Viewer.h"
-#include "ButtonsWindow.h"
-#include "NativeMenu.h"
+#include "app/App.h"
+#include "ui/ButtonsWindow.h"
+#include "ui/NativeMenu.h"
+#include "viewer/Viewer.h"
+#include "Core/Paths.h"
 
-#include "Paths.h"
-
-#include <string>
 #include <memory>
 
 int main(int argc, const char** argv) {
-    appConfig conf;
-    conf.title = "openSusie";
+    AppConfig config;
+    config.title = "openSusie";
 
     App app;
 
-    if (!app.init(conf)) {
+    if (!app.init(config)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "App failed to initialize: %s", SDL_GetError());
 
         return 1;

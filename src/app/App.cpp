@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <stdexcept>
 
-#include "Paths.h"
+#include "core/Paths.h"
 
 namespace {
 constexpr Uint32 SplashDurationMs = 2000;
@@ -62,9 +62,6 @@ void showSplash(const std::filesystem::path& path) {
 
 } // namespace
 
-App::App() {
-}
-
 App::~App() {
     SDL_RemoveEventWatch(App::eventWatch, this);
 
@@ -73,7 +70,7 @@ App::~App() {
     SDL_Quit();
 }
 
-bool App::init(appConfig conf) {
+bool App::init(const AppConfig& config) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Video failed to init: %s", SDL_GetError());
         return false;
@@ -91,7 +88,12 @@ bool App::init(appConfig conf) {
 
     showSplash(filesys.resolve(Paths::Resources, "BMTITLE.bmp"));
 
-    if (!userInterface.initialize(conf.title, conf.windowWidth, conf.windowHeight, filesys)) {
+    if (!userInterface.initialize(
+        config.title,
+        config.windowWidth,
+        config.windowHeight,
+        filesys
+    )) {
         return false;
     }
 

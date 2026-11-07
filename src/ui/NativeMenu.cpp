@@ -8,10 +8,10 @@
 
 #include <nlohmann/json.hpp>
 
-#include "App.h"
+#include "app/App.h"
 #include "NativeMenuPlatform.h"
-#include "Paths.h"
-#include "Viewer.h"
+#include "core/Paths.h"
+#include "viewer/Viewer.h"
 
 namespace {
 bool checkedAction(const std::string& action, const Viewer::Settings& settings, const Viewer& viewer) {

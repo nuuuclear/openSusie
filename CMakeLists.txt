@@ -101,7 +101,7 @@ target_include_directories(inicpp INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/inicpp/"
 )
 
-# Plugins
+# Project components
 
 add_subdirectory(pluginSDK)
 
@@ -117,134 +117,12 @@ function(openSusie_configure_susie_plugin target)
     endif()
 endfunction()
 
-add_subdirectory(plugins/stb)
-add_subdirectory(plugins/qoi)
-add_subdirectory(plugins/gif)
-add_subdirectory(plugins/pixelmap)
-add_subdirectory(plugins/maki)
-add_subdirectory(plugins/pic)
-add_subdirectory(plugins/xyz)
-
-foreach(
-    plugin IN ITEMS 
-        stb
-        qoi
-        gif
-        pnm
-        maki
-        pic
-        xyz
-)
-    openSusie_configure_size_optimizations(openSusie_${plugin})
-endforeach()
-
-if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
-    add_executable(openSusie_plugin_host32 EXCLUDE_FROM_ALL
-        "src/PluginHost32.cpp"
-        "src/PluginHostProtocol.h"
-        "src/PluginManager.h"
-        "src/PlatformSymbols.h"
-    )
-    target_link_libraries(openSusie_plugin_host32 PRIVATE openSusie_susie_sdk)
-    openSusie_configure_size_optimizations(openSusie_plugin_host32)
-    openSusie_disable_broken_mingw_ipo(openSusie_plugin_host32)
-    set_target_properties(openSusie_plugin_host32 PROPERTIES
-        OUTPUT_NAME "openSusie_plugin_host32"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    )
-    install(TARGETS openSusie_plugin_host32
-        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-        COMPONENT plugin_host32
-    )
-endif()
-
-if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT OPENSUSIE_BUILD_32BIT_PLUGIN_HOST)
-    message(STATUS
-        "Automatic openSusie_plugin_host32 build disabled by OPENSUSIE_BUILD_32BIT_PLUGIN_HOST"
-    )
-endif()
-
-# openSusie executable
-
-add_executable(openSusie
-    "src/main.cpp"
-    "src/App.cpp"
-    "src/App.h"
-    "src/Viewer.cpp"
-    "src/Viewer.h"
-    "src/ButtonsWindow.cpp"
-    "src/ButtonsWindow.h"
-    "src/UI.cpp"
-    "src/UI.h"
-    "src/NativeMenu.cpp"
-    "src/NativeMenu.h"
-    "src/NativeMenuPlatform.h"
-    "src/PluginManager.h"
-    "src/PluginHostClient.h"
-    "src/PluginHostProtocol.h"
-    "src/PlatformSymbols.h"
-    "src/Paths.h"
-    "src/FileSystem.cpp"
-    "src/FileSystem.h"
-    "src/Subroutine.h"
-    "src/Button.cpp"
-    "src/Button.h"
-    "src/ButtonPanel.cpp"
-    "src/ButtonPanel.h"
-)
-
-target_link_libraries(openSusie PRIVATE
-    SDL3::SDL3
-    nlohmann_json::nlohmann_json
-    inicpp
-    openSusie_susie_sdk
-)
-openSusie_configure_size_optimizations(openSusie)
-openSusie_disable_broken_mingw_ipo(openSusie)
-
-if(WIN32)
-    target_sources(openSusie PRIVATE "src/NativeMenuWin32.cpp")
-    target_link_libraries(openSusie PRIVATE user32)
-elseif(APPLE)
-    enable_language(OBJCXX)
-    set(CMAKE_OBJCXX_STANDARD ${CMAKE_CXX_STANDARD})
-    set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
-    target_sources(openSusie PRIVATE "src/NativeMenuMac.mm")
-    find_library(COCOA_FRAMEWORK Cocoa)
-    if(NOT COCOA_FRAMEWORK)
-        message(FATAL_ERROR "The Cocoa framework is required for native macOS menus")
-    endif()
-    target_link_libraries(openSusie PRIVATE "${COCOA_FRAMEWORK}")
-else()
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET "gtk+-3.0>=3.22")
-    target_sources(openSusie PRIVATE "src/NativeMenuGtk.cpp")
-    target_link_libraries(openSusie PRIVATE PkgConfig::GTK3)
-endif()
-
-set_target_properties(openSusie PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${openSusie_runtime_output_directory}"
-)
-
-if(WIN32)
-    set_target_properties(openSusie PROPERTIES WIN32_EXECUTABLE TRUE)
-endif()
+add_subdirectory(plugins)
+add_subdirectory(src)
 
 if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND OPENSUSIE_BUILD_32BIT_PLUGIN_HOST)
     openSusie_add_plugin_host32_subbuild()
 endif()
-
-if(MSVC)
-    target_link_options(openSusie PRIVATE "/ENTRY:mainCRTStartup")
-endif()
-
-if(UNIX AND NOT APPLE)
-    # Linux/BSD: Link to pthread and lm
-    target_link_libraries(openSusie PRIVATE pthread m ${CMAKE_DL_LIBS})
-    # Link to -latomic if needed (for specific compilers/architectures)
-    # target_link_libraries(MyApp PRIVATE atomic)
-endif()
-
 
 add_custom_target(openSusie_copy_resources
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
