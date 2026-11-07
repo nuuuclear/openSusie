@@ -6,6 +6,7 @@ set(openSusie_plugins
     maki
     pic
     xyz
+    msx
 )
 
 foreach(plugin IN LISTS openSusie_plugins)

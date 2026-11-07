@@ -20,6 +20,7 @@ Bundled plugins:
 - makichan (.mag, .mki, .max)
 - Yanagisawa PIC (.Pi .PIC .JPX)
 - RPG Maker XYZ
+- MSX Screen formats
 
 ## Building
 
