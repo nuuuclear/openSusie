@@ -102,6 +102,7 @@ function(openSusie_add_plugin_host32_subbuild)
         PREFIX "${host_build_dir}"
         SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
         BINARY_DIR "${host_build_dir}/build"
+        BUILD_ALWAYS TRUE
         CMAKE_GENERATOR "${host_generator}"
         ${host_generator_args}
         CMAKE_ARGS ${host_cmake_args}

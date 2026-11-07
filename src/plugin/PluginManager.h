@@ -276,7 +276,7 @@ public:
         }
 
         SusieLocalMemory infoMemory(info);
-        if (result != SPI_ALL_RIGHT || !info) {
+        if (!info) {
             std::cerr 
             <<  "<Plugins> ERROR: Could not enumerate archive with " << plugin->name
             <<  " (SPI error " << result << ")\n";
@@ -1579,7 +1579,7 @@ private:
                 return false;
             }
 
-        } else if (pluginType == "00AR") {
+        } else if (pluginType == "00AM" || pluginType == "00AR") {
             if ((!plugin.isSupported && !plugin.isSupportedW)
             ||  (!plugin.getArchiveInfo && !plugin.getArchiveInfoW)
             ||  (!plugin.getFile && !plugin.getFileW)
@@ -1608,7 +1608,7 @@ private:
             plugin.archivePlugin = true;
 
         } else {
-            reason = "Plugin type is '" + pluginType + "', not '00IN' or '00AR'";
+            reason = "Plugin type is '" + pluginType + "', not '00IN', '00AM', or '00AR'";
             std::cerr
             <<  "<Plugins> ERROR: Unsupported Susie plugin type: "
             <<  path.filename().string() << "\n";
