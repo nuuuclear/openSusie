@@ -115,6 +115,11 @@ private:
     void setToolbarAlwaysOnTop(bool alwaysOnTop);
     void syncWindowPositions(const SDL_WindowEvent& event);
 
+    void snapWindowToScreen(SDL_Window* window, int& x, int& y);
+    void dockToolbarToNearestScreenSide();
+    void snapSnappedWindowsToScreen(int& viewerX, int& viewerY);
+    void updateSnappedWindowPosition();
+
     Titlebar viewer;
     Titlebar toolbar;
     int viewerX = 0;

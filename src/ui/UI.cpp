@@ -170,6 +170,7 @@ void UI::handleEvent(const SDL_Event& event) {
 
         case SDL_EVENT_WINDOW_MAXIMIZED:
             if (event.window.windowID == viewerID) {
+                dockToolbarToNearestScreenSide();
                 ensureToolbarVisible();
                 setToolbarAlwaysOnTop(SDL_GetKeyboardFocus() == viewer.window);
             }
@@ -213,6 +214,12 @@ void UI::handleEvent(const SDL_Event& event) {
                 setToolbarAlwaysOnTop(false);
             }
 
+            break;
+
+        case SDL_EVENT_WINDOW_RESIZED:
+            if (event.window.windowID == viewerID) {
+                updateSnappedWindowPosition();
+            }
             break;
 
         default:
@@ -297,11 +304,16 @@ void UI::drawToolbarTitlebar() {
 
 void UI::setViewerVisible(bool visible) {
     if (!viewer.window) return;
-    if (visible) SDL_ShowWindow(viewer.window);
-    else {
+
+    if (visible) {
+        SDL_ShowWindow(viewer.window);
+    } else {
         setToolbarAlwaysOnTop(false);
         SDL_HideWindow(viewer.window);
-        if (toolbar.window) SDL_ShowWindow(toolbar.window);
+
+        if (toolbar.window) {
+            SDL_ShowWindow(toolbar.window);
+        }
     }
 }
 
@@ -340,11 +352,15 @@ void UI::resizeViewer(int width, int height) {
         static_cast<float>(maxWidth) / width,
         static_cast<float>(maxHeight) / height
     });
+
     SDL_SetWindowSize(
         viewer.window,
         std::max(1, static_cast<int>(width * scale)),
         std::max(1, static_cast<int>(height * scale))
     );
+
+    SDL_SyncWindow(viewer.window);
+    updateSnappedWindowPosition();
 }
 
 void UI::setToolbarOnRight(bool onRight) {
@@ -471,43 +487,64 @@ void UI::handleTitlebarMouseMotion(Titlebar& titlebar, const SDL_MouseMotionEven
     }
 
     constexpr float dragThreshold = 4.0f;
+
     float globalX = 0.0f;
     float globalY = 0.0f;
     SDL_GetGlobalMouseState(&globalX, &globalY);
+
     titlebar.dragX = globalX - titlebar.dragStartGlobalX;
     titlebar.dragY = globalY - titlebar.dragStartGlobalY;
 
-    if (titlebar.dragX * titlebar.dragX + titlebar.dragY * titlebar.dragY
-    >   dragThreshold * dragThreshold
-    ) {
+    if (!titlebar.pressDragged) {
+        const float distanceSquared =
+            titlebar.dragX * titlebar.dragX +
+            titlebar.dragY * titlebar.dragY;
+
+        if (distanceSquared <= dragThreshold * dragThreshold) {
+            return;
+        }
+
         titlebar.pressDragged = true;
     }
 
-    if (!titlebar.pressDragged
-    ||  titlebar.pressedMouseButton != SDL_BUTTON_LEFT
+    if (titlebar.pressedMouseButton != SDL_BUTTON_LEFT
     ||  titlebar.pressedButton >= 0
     ) {
         return;
     }
 
-    const bool viewerMaximized = titlebar.window == viewer.window
-        && (SDL_GetWindowFlags(viewer.window) & SDL_WINDOW_MAXIMIZED) != 0;
+    const bool isViewer = titlebar.window == viewer.window;
+
+    const bool viewerMaximized = isViewer 
+    &&  (SDL_GetWindowFlags(viewer.window) & SDL_WINDOW_MAXIMIZED) != 0;
+
     if (viewerMaximized) {
         restoreViewerForDrag(titlebar, event, globalX, globalY);
         return;
     }
 
-    if (windowsSnapped && (SDL_GetModState() & SDL_KMOD_SHIFT) != 0) {
+    if (!isViewer && windowsSnapped) {
         windowsSnapped = false;
     }
 
-    const int targetX = titlebar.dragStartWindowX
-        + static_cast<int>(std::lround(titlebar.dragX));
-    const int targetY = titlebar.dragStartWindowY
-        + static_cast<int>(std::lround(titlebar.dragY));
+    int targetX = titlebar.dragStartWindowX + static_cast<int>(std::lround(titlebar.dragX));
+    int targetY = titlebar.dragStartWindowY + static_cast<int>(std::lround(titlebar.dragY));
+
+    if (isViewer && windowsSnapped) {
+        snapWindowToScreen(viewer.window, targetX, targetY);
+
+        viewerX = targetX;
+        viewerY = targetY;
+
+        setWindowPositionIfChanged(viewer.window, targetX, targetY);
+        syncSnappedWindowPosition(titlebar, targetX, targetY);
+        return;
+    }
+
+    snapSnappedWindowsToScreen(targetX, targetY);
     setWindowPositionIfChanged(titlebar.window, targetX, targetY);
 
-    if (titlebar.window == viewer.window) {
+    if (isViewer) {
         viewerX = targetX;
         viewerY = targetY;
     } else {
@@ -515,7 +552,40 @@ void UI::handleTitlebarMouseMotion(Titlebar& titlebar, const SDL_MouseMotionEven
         toolbarY = targetY;
     }
 
-    syncSnappedWindowPosition(titlebar, targetX, targetY);
+    int viewerWidth = 0;
+    int toolbarWidth = 0;
+
+    SDL_GetWindowSize(viewer.window, &viewerWidth, nullptr);
+    SDL_GetWindowSize(toolbar.window, &toolbarWidth, nullptr);
+
+    const bool verticallyAligned = std::abs(viewerY - toolbarY) <= windowSnapDistance;
+
+    if (!verticallyAligned) {
+        return;
+    }
+
+    // right side
+    if (std::abs(toolbarX - (viewerX + viewerWidth)) <= windowSnapDistance) {
+        windowsSnapped = true;
+        toolbarOnRight = true;
+
+        toolbarX = viewerX + viewerWidth;
+        toolbarY = viewerY;
+
+        setWindowPositionIfChanged(toolbar.window, toolbarX, toolbarY);
+        return;
+    }
+
+    // left side
+    if (std::abs(viewerX - (toolbarX + toolbarWidth)) <= windowSnapDistance) {
+        windowsSnapped = true;
+        toolbarOnRight = false;
+
+        toolbarX = viewerX - toolbarWidth;
+        toolbarY = viewerY;
+
+        setWindowPositionIfChanged(toolbar.window, toolbarX, toolbarY);
+    }
 }
 
 void UI::restoreViewerForDrag(
@@ -538,20 +608,23 @@ void UI::restoreViewerForDrag(
 
     int restoredWidth = 0;
     SDL_GetWindowSize(viewer.window, &restoredWidth, nullptr);
-    const float horizontalAnchor = maximizedWidth > 0
-        ? event.x / static_cast<float>(maximizedWidth)
-        : 0.5f;
-    const int targetX = static_cast<int>(std::lround(
-        globalX - horizontalAnchor * restoredWidth
-    ));
+
+    const float horizontalAnchor
+    =   maximizedWidth > 0
+    ?   event.x / static_cast<float>(maximizedWidth)
+    :   0.5f;
+
+    const int targetX = static_cast<int>(std::lround(globalX - horizontalAnchor * restoredWidth));
     const int targetY = static_cast<int>(std::lround(globalY - event.y));
 
     setWindowPositionIfChanged(viewer.window, targetX, targetY);
     viewerX = targetX;
     viewerY = targetY;
+
     syncSnappedWindowPosition(titlebar, targetX, targetY);
     ensureToolbarVisible();
     setToolbarAlwaysOnTop(SDL_GetKeyboardFocus() == viewer.window);
+
     titlebar.dragStartGlobalX = globalX;
     titlebar.dragStartGlobalY = globalY;
     titlebar.dragStartWindowX = targetX;
@@ -561,24 +634,25 @@ void UI::restoreViewerForDrag(
 }
 
 void UI::syncSnappedWindowPosition(const Titlebar& titlebar, int x, int y) {
-    if (!windowsSnapped) return;
-
-    int toolbarWidth = 0;
-    int viewerWidth = 0;
-    SDL_GetWindowSize(toolbar.window, &toolbarWidth, nullptr);
-    SDL_GetWindowSize(viewer.window, &viewerWidth, nullptr);
-    if (titlebar.window == viewer.window) {
-        toolbarX = toolbarOnRight ? x + viewerWidth : x - toolbarWidth;
-        toolbarY = y;
-        setWindowPositionIfChanged(toolbar.window, toolbarX, toolbarY);
+    if (!windowsSnapped
+    ||  titlebar.window != viewer.window
+    ) {
         return;
     }
 
-    viewerX = toolbarOnRight
-        ? toolbarX - viewerWidth
-        : toolbarX + toolbarWidth;
-    viewerY = toolbarY;
-    setWindowPositionIfChanged(viewer.window, viewerX, viewerY);
+    int viewerWidth = 0;
+    int toolbarWidth = 0;
+
+    SDL_GetWindowSize(viewer.window, &viewerWidth, nullptr);
+    SDL_GetWindowSize(toolbar.window, &toolbarWidth, nullptr);
+
+    toolbarX = toolbarOnRight
+        ? x + viewerWidth
+        : x - toolbarWidth;
+
+    toolbarY = y;
+
+    setWindowPositionIfChanged(toolbar.window, toolbarX, toolbarY);
 }
 
 void UI::resetTitlebarPress(Titlebar& titlebar) {
@@ -712,70 +786,170 @@ void UI::destroyTitlebar(Titlebar& titlebar) {
 }
 
 void UI::syncWindowPositions(const SDL_WindowEvent& event) {
-    if (!windowPositionsInitialized) return;
+	if (!windowPositionsInitialized) {
+		return;
+	}
 
-    const SDL_WindowID viewerID = SDL_GetWindowID(viewer.window);
-    const SDL_WindowID toolbarID = SDL_GetWindowID(toolbar.window);
-    const bool viewerMoved = event.windowID == viewerID;
-    const bool toolbarMoved = event.windowID == toolbarID;
-    if (!viewerMoved && !toolbarMoved) return;
-    if (viewerMoved && (SDL_GetWindowFlags(viewer.window) & SDL_WINDOW_MAXIMIZED) != 0) {
+	const SDL_WindowID viewerID = SDL_GetWindowID(viewer.window);
+	const SDL_WindowID toolbarID = SDL_GetWindowID(toolbar.window);
+
+	if (event.windowID == viewerID) {
+		SDL_GetWindowPosition(viewer.window, &viewerX, &viewerY);
+		return;
+	}
+
+	if (event.windowID == toolbarID) {
+		SDL_GetWindowPosition(toolbar.window, &toolbarX, &toolbarY);
+	}
+}
+
+void UI::snapWindowToScreen(SDL_Window* window, int& x, int& y) {
+    if (!window) return;
+
+    const SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+    SDL_Rect bounds{};
+
+    if (display == 0 || !SDL_GetDisplayUsableBounds(display, &bounds)) {
+        return;
+    }
+
+    int width = 0;
+    int height = 0;
+    SDL_GetWindowSize(window, &width, &height);
+
+    const int leftDistance = std::abs(x - bounds.x);
+    const int rightDistance = std::abs(
+        x - (bounds.x + bounds.w - width)
+    );
+
+    const int topDistance = std::abs(y - bounds.y);
+    const int bottomDistance = std::abs(
+        y - (bounds.y + bounds.h - height)
+    );
+
+    if (leftDistance <= windowSnapDistance
+    &&  leftDistance <= rightDistance) {
+        x = bounds.x;
+    } else if (rightDistance <= windowSnapDistance) {
+        x = bounds.x + bounds.w - width;
+    }
+
+    if (topDistance <= windowSnapDistance
+    &&  topDistance <= bottomDistance) {
+        y = bounds.y;
+    } else if (bottomDistance <= windowSnapDistance) {
+        y = bounds.y + bounds.h - height;
+    }
+}
+
+void UI::dockToolbarToNearestScreenSide() {
+    if (!viewer.window || !toolbar.window) return;
+
+    const SDL_DisplayID display = SDL_GetDisplayForWindow(viewer.window);
+    SDL_Rect bounds{};
+
+    if (display == 0 || !SDL_GetDisplayUsableBounds(display, &bounds)) {
         return;
     }
 
     int toolbarWidth = 0;
-    int viewerWidth = 0;
-    SDL_GetWindowSize(toolbar.window, &toolbarWidth, nullptr);
-    SDL_GetWindowSize(viewer.window, &viewerWidth, nullptr);
+    int toolbarHeight = 0;
 
-    int movedX = 0;
-    int movedY = 0;
-    SDL_GetWindowPosition(viewerMoved ? viewer.window : toolbar.window, &movedX, &movedY);
-    const int oldX = viewerMoved ? viewerX : toolbarX;
-    const int oldY = viewerMoved ? viewerY : toolbarY;
-    const int deltaX = movedX - oldX;
-    const int deltaY = movedY - oldY;
+    SDL_GetWindowSize(toolbar.window, &toolbarWidth, &toolbarHeight);
+    SDL_GetWindowPosition(toolbar.window, &toolbarX, &toolbarY);
 
-    if (windowsSnapped && (SDL_GetModState() & SDL_KMOD_SHIFT) != 0) {
-        windowsSnapped = false;
-    }
+    const int toolbarCenter = toolbarX + toolbarWidth / 2;
 
-    if (viewerMoved) {
-        viewerX = movedX;
-        viewerY = movedY;
-    } else {
-        toolbarX = movedX;
-        toolbarY = movedY;
-    }
+    const int distanceLeft = std::abs(toolbarCenter - bounds.x);
+    const int distanceRight = std::abs(
+        toolbarCenter - (bounds.x + bounds.w)
+    );
 
-    if (windowsSnapped) {
-        if (viewerMoved) {
-            toolbarX += deltaX;
-            toolbarY += deltaY;
-            setWindowPositionIfChanged(toolbar.window, toolbarX, toolbarY);
-        } else {
-            viewerX = toolbarOnRight
-                ? toolbarX - viewerWidth
-                : toolbarX + toolbarWidth;
-            viewerY = toolbarY;
-            setWindowPositionIfChanged(viewer.window, viewerX, viewerY);
-        }
+    toolbarOnRight = distanceRight < distanceLeft;
+
+    toolbarX = toolbarOnRight
+        ? bounds.x + bounds.w - toolbarWidth
+        : bounds.x;
+
+    toolbarY = std::clamp(
+        toolbarY,
+        bounds.y,
+        std::max(bounds.y, bounds.y + bounds.h - toolbarHeight)
+    );
+
+    // treat the toolbar as temporarily attached to the maximized viewer
+    windowsSnapped = true;
+
+    setWindowPositionIfChanged(toolbar.window, toolbarX, toolbarY);
+}
+
+void UI::snapSnappedWindowsToScreen(int& x, int& y) {
+    if (!viewer.window || !toolbar.window) return;
+
+    const SDL_DisplayID display = SDL_GetDisplayForWindow(viewer.window);
+    SDL_Rect bounds{};
+
+    if (display == 0 || !SDL_GetDisplayUsableBounds(display, &bounds)) {
         return;
     }
 
-    if (std::abs(viewerY - toolbarY) > windowSnapDistance) return;
+    int viewerWidth = 0;
+    int viewerHeight = 0;
+    int toolbarWidth = 0;
+    int toolbarHeight = 0;
 
-    if (std::abs(viewerX - (toolbarX + toolbarWidth)) <= windowSnapDistance) {
-        windowsSnapped = true;
-        toolbarOnRight = false;
-        viewerX = toolbarX + toolbarWidth;
-        viewerY = toolbarY;
-        setWindowPositionIfChanged(viewer.window, viewerX, viewerY);
-    } else if (std::abs(toolbarX - (viewerX + viewerWidth)) <= windowSnapDistance) {
-        windowsSnapped = true;
-        toolbarOnRight = true;
-        toolbarX = viewerX + viewerWidth;
-        toolbarY = viewerY;
-        setWindowPositionIfChanged(toolbar.window, toolbarX, toolbarY);
+    SDL_GetWindowSize(viewer.window, &viewerWidth, &viewerHeight);
+    SDL_GetWindowSize(toolbar.window, &toolbarWidth, &toolbarHeight);
+
+    const int groupLeft = toolbarOnRight ? x : x - toolbarWidth;
+    const int groupRight = toolbarOnRight
+        ? x + viewerWidth + toolbarWidth
+        : x + viewerWidth;
+
+    const int groupHeight = std::max(viewerHeight, toolbarHeight);
+
+    const int leftDistance = std::abs(groupLeft - bounds.x);
+    const int rightDistance = std::abs(groupRight - (bounds.x + bounds.w));
+    const int topDistance = std::abs(y - bounds.y);
+    const int bottomDistance = std::abs(y + groupHeight - (bounds.y + bounds.h));
+
+    if (leftDistance <= windowSnapDistance
+    &&  leftDistance <= rightDistance) {
+        x += bounds.x - groupLeft;
+    } else if (rightDistance <= windowSnapDistance) {
+        x += bounds.x + bounds.w - groupRight;
     }
+
+    if (topDistance <= windowSnapDistance
+    &&  topDistance <= bottomDistance) {
+        y = bounds.y;
+    } else if (bottomDistance <= windowSnapDistance) {
+        y = bounds.y + bounds.h - groupHeight;
+    }
+}
+
+void UI::updateSnappedWindowPosition() {
+    if (!windowsSnapped || !viewer.window || !toolbar.window) {
+        return;
+    }
+
+    if ((SDL_GetWindowFlags(viewer.window) & SDL_WINDOW_MAXIMIZED) != 0) {
+        return;
+    }
+
+    SDL_GetWindowPosition(viewer.window, &viewerX, &viewerY);
+
+    int viewerWidth = 0;
+    int toolbarWidth = 0;
+
+    SDL_GetWindowSize(viewer.window, &viewerWidth, nullptr);
+    SDL_GetWindowSize(toolbar.window, &toolbarWidth, nullptr);
+
+    toolbarX = toolbarOnRight
+    ?   viewerX + viewerWidth
+    :   viewerX - toolbarWidth;
+
+    toolbarY = viewerY;
+
+    setWindowPositionIfChanged(toolbar.window, toolbarX, toolbarY);
 }

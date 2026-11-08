@@ -288,6 +288,7 @@ void Viewer::present(const std::string& imagePath) {
             - destRect.h) * 0.5f;
     destRect.x = imageX;
     destRect.y = imageY;
+
     app->ui().setViewerVisible(true);
 }
 
