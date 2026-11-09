@@ -16,6 +16,15 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "MinSizeRel"
       }
+    },
+    {
+      "name": "ninja-debug",
+      "displayName": "Ninja",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
     }
   ],
   "buildPresets": [
@@ -27,6 +36,10 @@
     {
       "name": "ninja",
       "configurePreset": "ninja"
+    },
+    {
+      "name": "ninja-debug",
+      "configurePreset": "ninja-debug"
     }
   ]
 }

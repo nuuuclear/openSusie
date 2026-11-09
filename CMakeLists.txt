@@ -144,6 +144,7 @@ add_dependencies(openSusie
     openSusie_maki
     openSusie_pic
     openSusie_xyz
+    openSusie_pnm
 )
 
 # install rules
