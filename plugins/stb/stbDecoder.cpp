@@ -10,11 +10,11 @@ namespace {
 const char* const PluginInfo[] = {
     "00IN",
     "stb_image",
-    "*.png;*.jpg;*.jpeg;*.bmp",
-    "PNG, JPEG, and BMP images"
+    "*.png;*.jpg;*.jpeg;*.bmp;*.pbm",
+    "PNG, JPEG, and Bitmap images"
 };
 
-const std::vector<std::string> Extensions = {".png", ".jpg", ".jpeg", ".bmp"};
+const std::vector<std::string> Extensions = {".png", ".jpg", ".jpeg", ".bmp", ".pbm"};
 
 SusieDecodedImage decodeImage(const char* buffer, std::size_t bufferSize, bool memoryInput) {
     SusieDecodedImage image{};
