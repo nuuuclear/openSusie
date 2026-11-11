@@ -1,0 +1,3 @@
+EXPORTS
+    GetPluginInfo=_GetPluginInfo@12
+    CreatePicture=_CreatePicture@28

@@ -3,12 +3,14 @@
 #include <cstddef>
 #include <cstdint>
 
+// Winapi
 #if defined(_WIN32) || defined(_WIN64)
     #ifndef NOMINMAX
         #define NOMINMAX
     #endif
     #include <windows.h>
     #define SUSIE_EXPORT extern "C" __declspec(dllexport)
+    #define SUSIE_CALL WINAPI
 #else
     #include <cstdlib>
     #include <cstddef>
@@ -33,6 +35,7 @@
 
     #define LMEM_MOVEABLE 0x0002
     #define SUSIE_EXPORT extern "C" __attribute__((visibility("default")))
+    #define SUSIE_CALL
 
     namespace susie_detail {
     struct LocalBlock {
@@ -81,24 +84,46 @@
     }
 #endif
 
-inline constexpr int SPI_NO_FUNCTION = -1;
-inline constexpr int SPI_ALL_RIGHT = 0;
-inline constexpr int SPI_ABORT = 1;
-inline constexpr int SPI_NOT_SUPPORT = 2;
-inline constexpr int SPI_OUT_OF_ORDER = 3;
-inline constexpr int SPI_NO_MEMORY = 4;
-inline constexpr int SPI_MEMORY_ERROR = 5;
-inline constexpr int SPI_FILE_READ_ERROR = 6;
-inline constexpr int SPI_WINDOW_ERROR = 7;
-inline constexpr int SPI_OTHER_ERROR = 8;
-inline constexpr int SPI_FILE_WRITE_ERROR = 9;
-inline constexpr int SPI_END_OF_FILE = 10;
+#define susiedef inline constexpr
 
-inline constexpr unsigned int SPI_INPUT_FILE = 0;
-inline constexpr unsigned int SPI_INPUT_MEMORY = 1;
-inline constexpr unsigned int SPI_IGNORE_CASE = 1u << 7;
-inline constexpr unsigned int SPI_OUTPUT_FILE = 0;
-inline constexpr unsigned int SPI_OUTPUT_MEMORY = 1u << 8;
+// Error
+susiedef int SPI_NO_FUNCTION = -1;
+susiedef int SPI_ALL_RIGHT = 0;
+susiedef int SPI_ABORT = 1;
+susiedef int SPI_NOT_SUPPORT = 2;
+susiedef int SPI_OUT_OF_ORDER = 3;
+susiedef int SPI_NO_MEMORY = 4;
+susiedef int SPI_MEMORY_ERROR = 5;
+susiedef int SPI_FILE_READ_ERROR = 6;
+susiedef int SPI_WINDOW_ERROR = 7;
+susiedef int SPI_OTHER_ERROR = 8;
+susiedef int SPI_FILE_WRITE_ERROR = 9;
+susiedef int SPI_END_OF_FILE = 10;
+
+// Flags
+susiedef unsigned int SPI_INPUT_FILE = 0;
+susiedef unsigned int SPI_INPUT_MEMORY = 1;
+susiedef unsigned int SPI_IGNORE_CASE = 1u << 7;
+susiedef unsigned int SPI_OUTPUT_FILE = 0;
+susiedef unsigned int SPI_OUTPUT_MEMORY = 1u << 8;
+
+// Bit format
+susiedef std::uint32_t SUSIE_BI_RGB = 0;
+susiedef std::uint32_t SUSIE_BI_RLE8 = 1;
+susiedef std::uint32_t SUSIE_BI_RLE4 = 2;
+susiedef std::uint32_t SUSIE_BI_BITFIELDS = 3;
+susiedef std::uint32_t SUSIE_BI_JPEG = 4;
+susiedef std::uint32_t SUSIE_BI_PNG = 5;
+susiedef std::uint32_t SUSIE_BI_ALPHABITFIELDS = 6;
+
+// Plugin type
+susiedef const char* SUSIE_INPUT_PLUGIN_TYPE = "00IN";
+susiedef const char* SUSIE_ARCHIVE_PLUGIN_TYPE = "00AM";
+susiedef const char* SUSIE_CREATE_PICTURE_PLUGIN_TYPE = "T0XN";
+
+susiedef std::uint32_t SUSIE_ANIMATION_API_VERSION = 1;
+
+#undef susiedef
 
 using SusieProgressCallback = int (CALLBACK*)(int, int, std::intptr_t);
 
@@ -148,6 +173,9 @@ struct SusiePictureInfo {
     WORD x_density;
     WORD y_density;
     std::int16_t colorDepth;
+#if defined(_WIN64) || INTPTR_MAX == INT64_MAX
+    std::uint8_t alignmentPadding[2];
+#endif
     HLOCAL hInfo;
 };
 #pragma pack(pop)
@@ -166,22 +194,6 @@ struct SusieBitmapInfoHeader {
     std::uint32_t colorsImportant;
 };
 static_assert(sizeof(SusieBitmapInfoHeader) == 40);
-
-inline constexpr std::uint32_t SUSIE_BI_RGB = 0;
-inline constexpr std::uint32_t SUSIE_BI_RLE8 = 1;
-inline constexpr std::uint32_t SUSIE_BI_RLE4 = 2;
-inline constexpr std::uint32_t SUSIE_BI_BITFIELDS = 3;
-inline constexpr std::uint32_t SUSIE_BI_JPEG = 4;
-inline constexpr std::uint32_t SUSIE_BI_PNG = 5;
-inline constexpr std::uint32_t SUSIE_BI_ALPHABITFIELDS = 6;
-
-using SusieGetPluginInfoFunc = int (WINAPI*)(int, LPSTR, int);
-using SusieGetPluginInfoWFunc = int (WINAPI*)(int, LPWSTR, int);
-using SusieIsSupportedFunc = int (WINAPI*)(LPCSTR, const void*);
-using SusieIsSupportedWFunc = int (WINAPI*)(LPCWSTR, const void*);
-
-using SusieGetArchiveInfoFunc = int (WINAPI*)(LPCSTR, std::size_t, unsigned int, HLOCAL*);
-using SusieGetArchiveInfoWFunc = int (WINAPI*)(LPCWSTR, std::size_t, unsigned int, HLOCAL*);
 
 #pragma pack(push, 1)
 struct SusieFileInfo {
@@ -210,66 +222,32 @@ struct SusieFileInfoW {
     std::uint32_t crc;
 };
 
-using SusieGetFileFunc = int (WINAPI*)(
-    LPCSTR,
-    std::size_t,
-    LPSTR,
-    unsigned int,
-    SusieProgressCallback,
-    std::intptr_t
-);
-using SusieGetFileWFunc = int (WINAPI*)(
-    LPCWSTR,
-    std::size_t,
-    LPWSTR,
-    unsigned int,
-    SusieProgressCallback,
-    std::intptr_t
-);
+using SusieGetPluginInfoFunc = int (WINAPI*)(int, LPSTR, int);
+using SusieGetPluginInfoWFunc = int (WINAPI*)(int, LPWSTR, int);
+using SusieIsSupportedFunc = int (WINAPI*)(LPCSTR, const void*);
+using SusieIsSupportedWFunc = int (WINAPI*)(LPCWSTR, const void*);
 
+using SusieGetArchiveInfoFunc = int (WINAPI*)(LPCSTR, std::size_t, unsigned int, HLOCAL*);
+using SusieGetArchiveInfoWFunc = int (WINAPI*)(LPCWSTR, std::size_t, unsigned int, HLOCAL*);
+
+using SusieGetFileFunc = int (WINAPI*)(LPCSTR, std::size_t, LPSTR, unsigned int, SusieProgressCallback, std::intptr_t);
+using SusieGetFileWFunc = int (WINAPI*)(LPCWSTR, std::size_t, LPWSTR, unsigned int, SusieProgressCallback, std::intptr_t);
+
+// Picture Get
 using SusieGetPictureInfoFunc = int (WINAPI*)(LPCSTR, std::size_t, unsigned int, SusiePictureInfo*);
 using SusieGetPictureInfoWFunc = int (WINAPI*)(LPCWSTR, std::size_t, unsigned int, SusiePictureInfo*);
-using SusieGetPictureFunc = int (WINAPI*)(
-    LPCSTR,
-    std::size_t,
-    unsigned int,
-    HANDLE*,
-    HANDLE*,
-    SusieProgressCallback,
-    std::intptr_t
-);
-using SusieGetPictureWFunc = int (WINAPI*)(
-    LPCWSTR,
-    std::size_t,
-    unsigned int,
-    HANDLE*,
-    HANDLE*,
-    SusieProgressCallback,
-    std::intptr_t
-);
+using SusieGetPictureFunc = int (WINAPI*)(LPCSTR, std::size_t, unsigned int, HANDLE*, HANDLE*, SusieProgressCallback, std::intptr_t);
+using SusieGetPictureWFunc = int (WINAPI*)(LPCWSTR, std::size_t, unsigned int, HANDLE*, HANDLE*, SusieProgressCallback, std::intptr_t);
 
-inline constexpr std::uint32_t SUSIE_ANIMATION_API_VERSION = 1;
+// Picture Create
+using SusieCreatePictureFunc = int (WINAPI*)(LPCSTR, unsigned int, void**, void**, SusiePictureInfo*, SusieProgressCallback, std::intptr_t);
+using SusieCreatePictureWFunc = int (WINAPI*)(LPCWSTR, unsigned int, void**, void**, SusiePictureInfo*, SusieProgressCallback, std::intptr_t);
 
+// Animation
 using SusieGetAnimationApiVersionFunc = std::uint32_t (WINAPI*)();
-using SusieOpenAnimationFunc = int (WINAPI*)(
-    LPCSTR,
-    DWORD_PTR,
-    HANDLE*,
-    std::uint32_t*,
-    std::uint32_t*
-);
-using SusieOpenAnimationWFunc = int (WINAPI*)(
-    LPCWSTR,
-    DWORD_PTR,
-    HANDLE*,
-    std::uint32_t*,
-    std::uint32_t*
-);
-using SusieGetAnimationFrameFunc = int (WINAPI*)(
-    HANDLE,
-    std::uint32_t,
-    HANDLE*,
-    HANDLE*,
-    std::uint32_t*
-);
+using SusieOpenAnimationFunc = int (WINAPI*)(LPCSTR, DWORD_PTR, HANDLE*, std::uint32_t*, std::uint32_t*);
+using SusieOpenAnimationWFunc = int (WINAPI*)(LPCWSTR, DWORD_PTR, HANDLE*, std::uint32_t*, std::uint32_t*);
+using SusieGetAnimationFrameFunc = int (WINAPI*)(HANDLE, std::uint32_t, HANDLE*, HANDLE*, std::uint32_t*);
 using SusieCloseAnimationFunc = void (WINAPI*)(HANDLE);
+
+static_assert(sizeof(SusiePictureInfo) == (sizeof(void*) == 8 ? 32 : 26));
