@@ -63,8 +63,8 @@ bool UI::initialize(const std::string& title, int viewerWidth, int viewerHeight,
         return false;
     }
 
-    const auto iconPath = files.resolve(Paths::Resources, "icon.bmp");
-    SDL_Surface* icon = SDL_LoadBMP(iconPath.string().c_str());
+    const auto iconPath = files.resolve(Paths::Resources, "icon.png");
+    SDL_Surface* icon = SDL_LoadPNG(iconPath.string().c_str());
     if (!icon) {
         SDL_LogError(
             SDL_LOG_CATEGORY_APPLICATION,
