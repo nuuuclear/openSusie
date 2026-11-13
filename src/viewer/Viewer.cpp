@@ -819,7 +819,9 @@ void Viewer::event(const SDL_Event& event) {
     int titlebarY = 0;
     switch (titlebar.consumeAction(&titlebarX, &titlebarY)) {
         case WindowTitlebar::Action::Close:
-            app->quit();
+            closeImage();
+
+            app->ui().raiseWindow(app->ui().toolbarWindow());
             return;
 
         case WindowTitlebar::Action::Minimize:

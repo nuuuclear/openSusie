@@ -525,6 +525,10 @@ void UI::minimizeWindows() {
     }
 }
 
+bool UI::raiseWindow(SDL_Window* window) {
+    return SDL_RaiseWindow(window);
+}
+
 void UI::toggleViewerMaximize() {
     SDL_Window* viewer = viewerWindow();
     if (!viewer) {

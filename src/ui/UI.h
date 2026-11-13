@@ -75,11 +75,14 @@ public:
 	void present();
 
 	void setViewerVisible(bool visible);
-	void minimizeWindows();
+
 	void toggleViewerMaximize();
 	void resizeViewer(int width, int height);
-
-	void setToolbarOnRight(bool onRight);
+    
+	void minimizeWindows();
+    bool raiseWindow(SDL_Window* window);
+	
+    void setToolbarOnRight(bool onRight);
 	bool isToolbarOnRight() const { return toolbarOnRight; }
 
 	void moveWindowFromTitlebar(SDL_Window* window, int targetX, int targetY);
