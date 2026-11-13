@@ -16,6 +16,7 @@
 #include "app/App.h"
 #include "core/Paths.h"
 #include "ui/NativeMenu.h"
+#include "ui/WindowTitlebar.h"
 
 namespace {
 constexpr Sint32 OpenFileEventCode = 0x494D4147;
@@ -43,6 +44,18 @@ std::string pluginIdentifier(const LoadedPlugin& plugin) {
 
 Viewer::Viewer(App* app) : Subroutine(app) {
     loadSettings();
+
+    const auto resourcePath = app->getFileSystem().resolve(Paths::Resources, "");
+
+    titlebar.initialize(
+        app->ui().viewerRenderer(),
+        WindowTitlebar::Config{
+            .height = ViewerTitleBarHeight,
+            .buttonCount = 3,
+            .showTitle = true
+        },
+        resourcePath.string()
+    );
 }
 
 Viewer::~Viewer() {
@@ -800,22 +813,28 @@ void Viewer::event(const SDL_Event& event) {
         return;
     }
 
+    titlebar.handleEvent(app->ui().viewerWindow(), event, app->ui());
+
     int titlebarX = 0;
     int titlebarY = 0;
-    switch (app->ui().consumeTitlebarAction(UI::Window::Viewer, &titlebarX, &titlebarY)) {
-        case UI::Action::Close:
+    switch (titlebar.consumeAction(&titlebarX, &titlebarY)) {
+        case WindowTitlebar::Action::Close:
             app->quit();
             return;
-        case UI::Action::Minimize:
+
+        case WindowTitlebar::Action::Minimize:
             app->ui().minimizeWindows();
             return;
-        case UI::Action::ToggleMaximize:
+
+        case WindowTitlebar::Action::ToggleMaximize:
             app->ui().toggleViewerMaximize();
             return;
-        case UI::Action::ShowMenu:
-            nativeMenu->show(app->ui().viewerWindow(), titlebarX, titlebarY);
+
+        case WindowTitlebar::Action::ShowMenu:
+            nativeMenu->show(app->ui().viewerWindow(), mouseX, mouseY);
             return;
-        case UI::Action::None:
+
+        case WindowTitlebar::Action::None:
             break;
     }
 
@@ -1042,7 +1061,11 @@ void Viewer::draw() {
         SDL_SetRenderClipRect(renderer, nullptr);
     }
     
-    app->ui().drawViewerTitlebar(title);
+    titlebar.draw(
+        app->ui().viewerWindow(),
+        app->ui().viewerRenderer(),
+        title
+    );
 }
 
 void Viewer::loadPlugins(const std::string& dirPath) {

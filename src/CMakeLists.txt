@@ -21,6 +21,8 @@ set(openSusie_sources
     ui/NativeMenuPlatform.h
     ui/UI.cpp
     ui/UI.h
+    ui/WindowTitlebar.cpp
+    ui/WindowTitlebar.h
     viewer/Viewer.cpp
     viewer/Viewer.h
 )

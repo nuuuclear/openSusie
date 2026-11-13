@@ -8,6 +8,7 @@
 
 #include "core/Subroutine.h"
 #include "plugin/PluginManager.h"
+#include "ui/WindowTitlebar.h"
 
 class App;
 class PluginManager;
@@ -91,13 +92,18 @@ private:
 private:
     SDL_Texture* texture = nullptr;
 
+    WindowTitlebar titlebar;
+    void handleTitlebarAction(const SDL_Event& event);
+
     PluginManager pm;
+    
     PluginAnimation animation;
     std::uint32_t animationFrame = 0;
     std::uint32_t animationLoop = 0;
     std::uint32_t animationFrameDurationMs = 100;
     double animationElapsedMs = 0.0;
     bool animationPlaying = false;
+
     std::string dialogImageExtensions;
     SDL_DialogFileFilter dialogFilters[2]{};
 

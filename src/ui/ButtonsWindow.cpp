@@ -64,66 +64,113 @@ constexpr ButtonDefinition ButtonDefinitions[] = {
 };
 } // namespace
 
+
 ButtonsWindow::ButtonsWindow(App* app, Viewer* imageViewer, NativeMenu* nativeMenu)
-:   Subroutine(app),
-    viewer(imageViewer),
-    menu(nativeMenu),
-    buttons(ButtonPanelConfig{
-        .layout = ButtonLayout::Vertical,
-        .x = 0,
-        .y = ToolbarTitleBarHeight,
-        .spacing = 0,
-        .padding = 0
-    })
+	: Subroutine(app),
+	  viewer(imageViewer),
+	  menu(nativeMenu),
+	  buttons(ButtonPanelConfig{
+		  .layout = ButtonLayout::Vertical,
+		  .x = 0,
+		  .y = ToolbarTitleBarHeight,
+		  .spacing = 0,
+		  .padding = 0
+	  })
 {
-    const auto path = app->getFileSystem().resolve(Paths::Resources, "buttons.bmp");
-    SDL_Surface* surface = SDL_LoadBMP(path.string().c_str());
-    if (!surface) {
-        SDL_LogError(
-            SDL_LOG_CATEGORY_APPLICATION,
-            "Could not load button icons: %s",
-            SDL_GetError()
-        );
-        return;
-    }
+	const auto resourcePath = app->getFileSystem().resolve(Paths::Resources, "");
 
-    if (!SDL_SetSurfaceColorKey(surface, true, SDL_MapSurfaceRGB(surface, 0, 0, 0))) {
-        SDL_LogError(
-            SDL_LOG_CATEGORY_APPLICATION,
-            "Could not set button sprite transparency: %s",
-            SDL_GetError()
-        );
-    } else {
-        buttonTexture = SDL_CreateTextureFromSurface(app->ui().toolbarRenderer(), surface);
-        if (!buttonTexture) {
-            SDL_LogError(
-                SDL_LOG_CATEGORY_APPLICATION,
-                "Could not create button sprite texture: %s",
-                SDL_GetError()
-            );
-        }
-    }
+	if (!titlebar.initialize(
+		app->ui().toolbarRenderer(),
+		WindowTitlebar::Config{
+			.height = ToolbarTitleBarHeight,
+			.buttonCount = 1,
+			.showTitle = false
+		},
+		resourcePath.string())
+    ) {
+		SDL_LogError(
+			SDL_LOG_CATEGORY_APPLICATION,
+			"Could not initialize toolbar titlebar"
+		);
+	}
 
-    SDL_DestroySurface(surface);
+	buttons.setConfig(ButtonPanelConfig{
+		.layout = ButtonLayout::Vertical,
+		.x = 0,
+		.y = titlebar.height(),
+		.spacing = 0,
+		.padding = 0
+	});
 
-    for (const auto& definition : ButtonDefinitions) {
-        buttons.addButton(Button(
-            definition.tooltip,
-            definition.action,
-            ButtonSprite{
-                .x = 0,
-                .y = definition.spriteY,
-                .width = definition.width,
-                .height = definition.height,
-                .hoverOffsetX = 32
-            }
-        ));
-    }
+	const auto buttonPath = app->getFileSystem().resolve(Paths::Resources, "buttons.bmp");
+	SDL_Surface* surface = SDL_LoadBMP(buttonPath.string().c_str());
 
-    buttons.setup();
+	if (!surface) {
+		SDL_LogError(
+			SDL_LOG_CATEGORY_APPLICATION,
+			"Could not load button icons from %s: %s",
+			buttonPath.string().c_str(),
+			SDL_GetError()
+		);
+	} else {
+		if (!SDL_SetSurfaceColorKey(
+			surface,
+			true,
+			SDL_MapSurfaceRGB(surface, 0, 0, 0))
+        ) {
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"Could not set button sprite transparency: %s",
+				SDL_GetError()
+			);
+		}
+
+		buttonTexture = SDL_CreateTextureFromSurface(
+			app->ui().toolbarRenderer(),
+			surface
+		);
+
+		if (!buttonTexture) {
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"Could not create button sprite texture: %s",
+				SDL_GetError()
+			);
+		} else {
+			SDL_SetTextureScaleMode(buttonTexture, SDL_SCALEMODE_NEAREST);
+			SDL_SetTextureBlendMode(buttonTexture, SDL_BLENDMODE_BLEND);
+
+			float width = 0.0f;
+			float height = 0.0f;
+			SDL_GetTextureSize(buttonTexture, &width, &height);
+
+			SDL_Log("Loaded toolbar sprite sheet: %.0fx%.0f", width, height);
+		}
+
+		SDL_DestroySurface(surface);
+	}
+
+	for (const auto& definition : ButtonDefinitions) {
+		buttons.addButton(Button(
+			definition.tooltip,
+			definition.action,
+			ButtonSprite{
+				.x = 0,
+				.y = definition.spriteY,
+				.width = definition.width,
+				.height = definition.height,
+				.hoverOffsetX = 32
+			}
+		));
+	}
+
+	buttons.setup();
 }
 
+
 ButtonsWindow::~ButtonsWindow() {
+    titlebar.shutdown();
+
     SDL_DestroyTexture(buttonTexture);
 }
 
@@ -133,20 +180,25 @@ void ButtonsWindow::event(const SDL_Event& event) {
 	int titlebarX = 0;
 	int titlebarY = 0;
 
-	switch (app->ui().consumeTitlebarAction(UI::Window::Toolbar, &titlebarX, &titlebarY)) {
-		case UI::Action::Close:
-			app->quit();
-			return;
+	titlebar.handleEvent(app->ui().toolbarWindow(), event, app->ui());
 
-		case UI::Action::ShowMenu:
-			menu->show(app->ui().toolbarWindow(), titlebarX, titlebarY);
-			return;
+    switch (titlebar.consumeAction(&titlebarX, &titlebarY)) {
+        case WindowTitlebar::Action::Close:
+            app->quit();
+            return;
 
-		case UI::Action::Minimize:
-		case UI::Action::ToggleMaximize:
-		case UI::Action::None:
-			break;
-	}
+        case WindowTitlebar::Action::ShowMenu:
+            menu->show(app->ui().toolbarWindow(), mouseX, mouseY);
+            return;
+
+        case WindowTitlebar::Action::Minimize:
+            app->ui().minimizeWindows();
+            return;
+
+        case WindowTitlebar::Action::ToggleMaximize:
+        case WindowTitlebar::Action::None:
+            break;
+    }
 
 	if (event.type == SDL_EVENT_WINDOW_MOUSE_LEAVE
     &&  event.window.windowID == buttonsWindowID
@@ -158,11 +210,14 @@ void ButtonsWindow::event(const SDL_Event& event) {
 	if (event.type == SDL_EVENT_MOUSE_MOTION
     &&  event.motion.windowID == buttonsWindowID
     ) {
+        mouseX = event.motion.x;
+        mouseY = event.motion.y;
+
 		buttons.updateHover(event.motion.x, event.motion.y);
 		return;
 	}
 
-	if (event.type == SDL_EVENT_MOUSE_BUTTON_UP
+	if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN
     &&  event.button.windowID == buttonsWindowID
     &&  event.button.button == SDL_BUTTON_LEFT
     ) {
@@ -188,9 +243,12 @@ void ButtonsWindow::draw() {
 	SDL_Renderer* renderer = app->ui().toolbarRenderer();
 	if (!renderer) return;
 
-	app->ui().drawToolbarTitlebar();
-	if (!buttonTexture) return;
+	titlebar.draw(
+        app->ui().toolbarWindow(),
+        app->ui().toolbarRenderer()
+    );
 
+	if (!buttonTexture) return;
 	buttons.draw(renderer, buttonTexture);
 }
 

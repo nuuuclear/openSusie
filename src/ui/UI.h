@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include <string>
+#include <vector>
 
 class FileSystem;
 
@@ -11,123 +12,141 @@ inline constexpr int ViewerTitleBarHeight = 18;
 
 class UI {
 public:
-    enum class Window {
-        Viewer,
-        Toolbar
-    };
+	enum class WindowRole {
+		Viewer,
+		Toolbar,
+		Player,
+		Other
+	};
 
-    enum class Action {
-        None,
-        Close,
-        Minimize,
-        ToggleMaximize,
-        ShowMenu
-    };
+	struct WindowData {
+		WindowRole role = WindowRole::Other;
+		SDL_Window* window = nullptr;
+		SDL_Renderer* renderer = nullptr;
 
-    UI() = default;
-    ~UI();
+		int x = 0;
+		int y = 0;
+		int width = 0;
+		int height = 0;
 
-    UI(const UI&) = delete;
-    UI& operator=(const UI&) = delete;
+		bool ownsWindow = true;
+		bool ownsRenderer = true;
+		bool participatesInSnapping = false;
+	};
 
-    bool initialize(
-        const std::string& title,
-        int viewerWidth,
-        int viewerHeight,
-        const FileSystem& files
-    );
-    void shutdown();
+	UI() = default;
+	~UI();
 
-    SDL_Window* viewerWindow() const;
-    SDL_Renderer* viewerRenderer() const;
-    SDL_Window* toolbarWindow() const;
-    SDL_Renderer* toolbarRenderer() const;
+	UI(const UI&) = delete;
+	UI& operator=(const UI&) = delete;
 
-    void handleEvent(const SDL_Event& event);
-    Action consumeTitlebarAction(Window window, int* x = nullptr, int* y = nullptr);
+	bool initialize(
+		const std::string& title,
+		int viewerWidth,
+		int viewerHeight,
+		const FileSystem& files
+	);
+	void shutdown();
 
-    void beginFrame();
-    void present();
-    void drawViewerTitlebar(const std::string& title);
-    void drawToolbarTitlebar();
+	SDL_Window* viewerWindow() const;
+	SDL_Renderer* viewerRenderer() const;
+	SDL_Window* toolbarWindow() const;
+	SDL_Renderer* toolbarRenderer() const;
+	SDL_Window* playerWindow() const;
+	SDL_Renderer* playerRenderer() const;
 
-    void setViewerVisible(bool visible);
-    void minimizeWindows();
-    void toggleViewerMaximize();
-    void resizeViewer(int width, int height);
-    void setToolbarOnRight(bool onRight);
-    bool isToolbarOnRight() const { return toolbarOnRight; }
+	SDL_Window* window(WindowRole role) const;
+	SDL_Renderer* renderer(WindowRole role) const;
+
+	bool registerWindow(
+		WindowRole role,
+		SDL_Window* window,
+		SDL_Renderer* renderer,
+		bool ownsWindow = false,
+		bool ownsRenderer = false
+	);
+	void unregisterWindow(SDL_Window* window);
+
+	const std::vector<WindowData>& windows() const { return windowList; }
+
+	void handleEvent(const SDL_Event& event);
+
+	void beginFrame();
+	void present();
+
+	void setViewerVisible(bool visible);
+	void minimizeWindows();
+	void toggleViewerMaximize();
+	void resizeViewer(int width, int height);
+
+	void setToolbarOnRight(bool onRight);
+	bool isToolbarOnRight() const { return toolbarOnRight; }
+
+	void moveWindowFromTitlebar(SDL_Window* window, int targetX, int targetY);
+	void restoreViewerForTitlebarDrag(
+		float globalX,
+		float globalY,
+		float mouseX,
+		float mouseY
+	);
+
+	void setWindowPosition(SDL_Window* window, int x, int y);
+	void refreshWindowData(SDL_Window* window);
+
+	static SDL_HitTestResult SDLCALL viewerHitTest(
+		SDL_Window* window,
+		const SDL_Point* area,
+		void* data
+	);
 
 private:
-    struct Titlebar {
-        SDL_Window* window = nullptr;
-        SDL_Renderer* renderer = nullptr;
-        SDL_Texture* closeTexture = nullptr;
-        SDL_Texture* minimizeTexture = nullptr;
-        SDL_Texture* maximizeTexture = nullptr;
+	std::vector<WindowData> windowList;
 
-        int height = 0;
-        int buttonCount = 0;
-        int pressedButton = -1;
-        Uint8 pressedMouseButton = 0;
+	int viewerX = 0;
+	int viewerY = 0;
+    
+	int toolbarX = 0;
+	int toolbarY = 0;
 
-        float dragX = 0.0f;
-        float dragY = 0.0f;
-        float dragStartGlobalX = 0.0f;
-        float dragStartGlobalY = 0.0f;
-        int dragStartWindowX = 0;
-        int dragStartWindowY = 0;
-        bool pressDragged = false;
+	int playerX = 0;
+	int playerY = 0;
 
-        Action pendingAction = Action::None;
-        int actionX = 0;
-        int actionY = 0;
-    };
+	bool windowPositionsInitialized = false;
+	bool windowsSnapped = true;
+	bool toolbarOnRight = false;
+	bool toolbarDockedToScreen = false;
 
-    static int buttonAt(const Titlebar& titlebar, float x, float y);
-    static SDL_HitTestResult SDLCALL viewerHitTest(
-        SDL_Window* window,
-        const SDL_Point* area,
-        void* data
-    );
+	static constexpr int windowSnapDistance = 8;
 
-    void handleTitlebarEvent(Titlebar& titlebar, const SDL_Event& event);
-    void handleTitlebarMouseMotion(Titlebar& titlebar, const SDL_MouseMotionEvent& event);
-    void handleTitlebarMouseButtonUp(Titlebar& titlebar, const SDL_MouseButtonEvent& event);
+	WindowData* findWindow(SDL_Window* window);
+	const WindowData* findWindow(SDL_Window* window) const;
+	WindowData* findWindow(WindowRole role);
+	const WindowData* findWindow(WindowRole role) const;
 
-    static void resetTitlebarPress(Titlebar& titlebar);
-    void restoreViewerForDrag(
-        Titlebar& titlebar,
-        const SDL_MouseMotionEvent& event,
-        float globalX,
-        float globalY
-    );
+	bool createManagedWindow(
+		WindowRole role,
+		const std::string& title,
+		int width,
+		int height,
+		SDL_WindowFlags flags
+	);
 
-    void syncSnappedWindowPosition(const Titlebar& titlebar, int x, int y);
-    static void setWindowPositionIfChanged(SDL_Window* window, int x, int y);
+	void destroyManagedWindows();
+	void updateWindowData(WindowData& data);
+	void updateAllWindowData();
 
-    static SDL_Texture* loadButtonTexture(SDL_Renderer* renderer, const std::string& path);
+	void syncWindowPositions(const SDL_WindowEvent& event);
+	void ensureToolbarVisible();
+	void setToolbarAlwaysOnTop(bool alwaysOnTop);
 
-    static void drawTitlebar(Titlebar& titlebar, const std::string& title);
-    static void destroyTitlebar(Titlebar& titlebar);
+	void setWindowPositionIfChanged(SDL_Window* window, int x, int y);
+	void syncSnappedWindowPosition(int viewerX, int viewerY);
+	void updateSnappedWindowPosition();
 
-    void ensureToolbarVisible();
-    void setToolbarAlwaysOnTop(bool alwaysOnTop);
-    void syncWindowPositions(const SDL_WindowEvent& event);
+	void snapWindowToScreen(SDL_Window* window, int& x, int& y);
+	void snapSnappedWindowsToScreen(int& viewerX, int& viewerY);
+	void dockToolbarToNearestScreenSide();
 
-    void snapWindowToScreen(SDL_Window* window, int& x, int& y);
-    void dockToolbarToNearestScreenSide();
-    void snapSnappedWindowsToScreen(int& viewerX, int& viewerY);
-    void updateSnappedWindowPosition();
-
-    Titlebar viewer;
-    Titlebar toolbar;
-    int viewerX = 0;
-    int viewerY = 0;
-    int toolbarX = 0;
-    int toolbarY = 0;
-    bool windowPositionsInitialized = false;
-    bool windowsSnapped = true;
-    bool toolbarOnRight = false;
-    static constexpr int windowSnapDistance = 16;
+	void handleViewerMaximized();
+	void handleViewerRestored();
 };

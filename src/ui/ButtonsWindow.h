@@ -4,6 +4,7 @@
 
 #include "core/Subroutine.h"
 #include "ButtonPanel.h"
+#include "WindowTitlebar.h"
 
 class Viewer;
 class NativeMenu;
@@ -22,6 +23,10 @@ private:
     SDL_Texture* buttonTexture = nullptr;
 
     ButtonPanel buttons;
+    WindowTitlebar titlebar;
+
+    float mouseX = 0.0f;
+    float mouseY = 0.0f;
 
 	void activateButton(const Button& button);
 };
