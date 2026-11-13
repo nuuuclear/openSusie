@@ -17,7 +17,6 @@
 - More interpolation options
 
 ### Needs fixing:
-- Recent files, clicking on a file in the list does nothing.
 - Archive plugins, these sometimes wont load or will behave weirdly
 - Input handling in the UI
     Especially the mouse on the toolbar, clicks are handled as falling edge which causes buttons to be press when dragging windows sometimes.

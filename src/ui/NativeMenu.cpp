@@ -206,6 +206,7 @@ void NativeMenu::show(SDL_Window* parent, int x, int y) {
         items,
         [this](int id) { activate(id); }
     );
+
     if (!shown) {
         SDL_LogError(
             SDL_LOG_CATEGORY_APPLICATION,
@@ -269,21 +270,29 @@ std::vector<NativeMenuItem> NativeMenu::buildItems() {
             if (sourceItem.action == "decoder.preferences") {
                 item.children = build(buildDecoderPreferences());
                 item.action.clear();
+
             } else if (sourceItem.action == "recent") {
+                std::vector<NativeMenuItem> recentItems;
+
                 if (recentFiles.empty()) {
                     NativeMenuItem empty;
                     empty.label = "(No recent files)";
                     empty.enabled = false;
-                    item.children.push_back(std::move(empty));
+                    recentItems.push_back(std::move(empty));
+
                 } else {
                     for (size_t i = 0; i < recentFiles.size(); ++i) {
                         NativeMenuItem recent;
                         recent.label = std::filesystem::path(recentFiles[i]).filename().string();
                         recent.action = "recent:" + std::to_string(i);
-                        item.children.push_back(std::move(recent));
+                        recentItems.push_back(std::move(recent));
                     }
                 }
+
+                item.children = build(recentItems);
                 item.action.clear();
+
+                
             } else if (!sourceItem.children.empty()) {
                 item.children = build(sourceItem.children);
             }
@@ -291,7 +300,11 @@ std::vector<NativeMenuItem> NativeMenu::buildItems() {
             if (item.checkable) {
                 item.checked = checkedAction(item.action, settings, *viewer);
             }
-            if (requiresImage(item.action)) item.enabled = item.enabled && hasImage;
+
+            if (requiresImage(item.action)) {
+                item.enabled = item.enabled && hasImage;
+            }
+
             if (!item.action.empty()) {
                 item.command = static_cast<int>(commandActions.size() + 1);
                 commandActions.push_back(item.action);
@@ -387,6 +400,7 @@ void NativeMenu::activate(int id) {
 
     if (action.rfind("recent:", 0) == 0) {
         const size_t index = static_cast<size_t>(std::stoul(action.substr(7)));
+
         if (index < recentFiles.size()) {
             viewer->present(recentFiles[index]);
         }
