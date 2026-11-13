@@ -255,8 +255,21 @@ void WindowTitlebar::handleEvent(SDL_Window* window, const SDL_Event& event, UI&
 
             return;
         } else if (event.button.button == SDL_BUTTON_RIGHT) {
-            pendingAction = Action::ShowMenu;
-            return;
+			if (event.button.y < 0.0f || event.button.y >= static_cast<float>(config.height)) {
+				return;
+			}
+
+			pendingAction = Action::ShowMenu;
+
+			float globalX = 0.0f;
+			float globalY = 0.0f;
+
+			SDL_GetGlobalMouseState(&globalX, &globalY);
+
+			actionX = static_cast<int>(globalX);
+			actionY = static_cast<int>(globalY);
+
+			return;
         } else {
             return;
         }
