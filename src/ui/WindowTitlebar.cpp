@@ -4,6 +4,9 @@
 
 #include <SDL3/SDL.h>
 
+#define TEXTR_IMPLEMENTATION
+#include <textr.h>
+
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -95,6 +98,10 @@ bool WindowTitlebar::initialize(
 		return false;
 	}
 
+	font = TR_CreateFont(renderer, 12);
+	TR_AddFontFile(font, joinPath(resourcePath, "PixelMplus12.ttf").c_str(), 0);
+	TR_SetRenderMode(font, TR_RENDER_PIXEL_PERFECT);
+
 	resetPress();
 	pendingAction = Action::None;
 
@@ -115,6 +122,11 @@ void WindowTitlebar::shutdown() {
 	if (maximizeTexture) {
 		SDL_DestroyTexture(maximizeTexture);
 		maximizeTexture = nullptr;
+	}
+
+	if (font) {
+		TR_DestroyFont(font);
+		font = nullptr;
 	}
 
 	resetPress();
@@ -419,23 +431,16 @@ void WindowTitlebar::draw(SDL_Window* window, SDL_Renderer* renderer, const std:
     }
 
 	if (config.showTitle && !title.empty()) {
-		SDL_SetRenderDrawColor(
-			renderer,
-			TextColor.r,
-			TextColor.g,
-			TextColor.b,
-			TextColor.a
-        );
-
 		const int titleX = 6;
-		const int titleY = std::max(0, (config.height - 8) / 2);
+		const int titleY = static_cast<int>(SDL_roundf((config.height - TR_LineHeight(font)) * 0.5f));
 
-		SDL_RenderDebugText(
-			renderer,
+		TR_DrawText(
+			font,
 			static_cast<float>(titleX),
 			static_cast<float>(titleY),
-			title.c_str()
-        );
+			title.c_str(),
+			TextColor
+		);
 	}
 }
 

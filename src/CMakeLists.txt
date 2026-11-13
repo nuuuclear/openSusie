@@ -34,6 +34,8 @@ target_link_libraries(openSusie PRIVATE
     nlohmann_json::nlohmann_json
     inicpp
     stbImageWrite
+    stb_truetype
+    textr
     openSusie_susie_sdk
 )
 

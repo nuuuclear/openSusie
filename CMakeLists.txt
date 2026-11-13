@@ -118,6 +118,16 @@ target_include_directories(stbImageWrite INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/external/stb_image_write/"
 )
 
+add_library(stb_truetype INTERFACE)
+target_include_directories(stb_truetype INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/stb_truetype/"
+)
+
+add_library(textr INTERFACE)
+target_include_directories(textr INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/textr/"
+)
+
 # Project components
 
 add_subdirectory(pluginSDK)

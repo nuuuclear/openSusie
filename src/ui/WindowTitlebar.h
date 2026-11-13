@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SDL3/SDL.h>
+#include <textr.h>
 
 #include <string>
 
@@ -46,6 +47,8 @@ private:
 	SDL_Texture* closeTexture = nullptr;
 	SDL_Texture* minimizeTexture = nullptr;
 	SDL_Texture* maximizeTexture = nullptr;
+
+	TR_Font* font = nullptr;
 
 	int pressedButton = -1;
 	Uint8 pressedMouseButton = 0;
