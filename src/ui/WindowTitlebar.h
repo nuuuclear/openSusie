@@ -20,6 +20,8 @@ public:
 	struct Config {
 		int height = 18;
 		int buttonCount = 3;
+		float rightGap 	= 4;
+		float buttonGap = 2;
 		bool showTitle = true;
 	};
 

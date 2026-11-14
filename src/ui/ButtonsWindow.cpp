@@ -66,16 +66,16 @@ constexpr ButtonDefinition ButtonDefinitions[] = {
 
 
 ButtonsWindow::ButtonsWindow(App* app, Viewer* imageViewer, NativeMenu* nativeMenu)
-	: Subroutine(app),
-	  viewer(imageViewer),
-	  menu(nativeMenu),
-	  buttons(ButtonPanelConfig{
-		  .layout = ButtonLayout::Vertical,
-		  .x = 0,
-		  .y = ToolbarTitleBarHeight,
-		  .spacing = 0,
-		  .padding = 0
-	  })
+: 	Subroutine(app),
+	viewer(imageViewer),
+	menu(nativeMenu),
+	buttons(ButtonPanelConfig{
+		.layout = ButtonLayout::Vertical,
+		.x = 0,
+		.y = ToolbarTitleBarHeight,
+		.spacing = 0,
+		.padding = 0
+	})
 {
 	const auto resourcePath = app->getFileSystem().resolve(Paths::Resources, "");
 
@@ -84,6 +84,7 @@ ButtonsWindow::ButtonsWindow(App* app, Viewer* imageViewer, NativeMenu* nativeMe
 		WindowTitlebar::Config{
 			.height = ToolbarTitleBarHeight,
 			.buttonCount = 1,
+			.rightGap = 1,
 			.showTitle = false
 		},
 		resourcePath.string())

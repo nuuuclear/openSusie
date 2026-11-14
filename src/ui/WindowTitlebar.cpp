@@ -36,10 +36,10 @@ std::string joinPath(const std::string& base, const char* filename) {
 }
 
 bool isInside(float x, float y, const SDL_FRect& rect) {
-    return x >= rect.x &&
-        y >= rect.y &&
-        x < rect.x + rect.w &&
-        y < rect.y + rect.h;
+    return x >= rect.x
+		&& y >= rect.y
+		&& x <  rect.x + rect.w
+		&& y <  rect.y + rect.h;
 }
 
 bool IsWindowFocused(SDL_Window* window) {
@@ -191,7 +191,7 @@ int WindowTitlebar::buttonAt(SDL_Window* window, float x, float y) const {
 		minimizeTexture
 	};
 
-	float right = static_cast<float>(windowWidth);
+    float buttonRight = static_cast<float>(windowWidth) - config.rightGap;
 
 	for (int i = 0; i < config.buttonCount; ++i) {
 		SDL_Texture* texture = textures[i];
@@ -205,15 +205,15 @@ int WindowTitlebar::buttonAt(SDL_Window* window, float x, float y) const {
 		SDL_GetTextureSize(texture, &width, &height);
 
 		const float buttonY = (config.height - height) * 0.5f;
-		const float buttonX = right - width;
+		const float buttonX = buttonRight - width;
 
-		if (x >= buttonX && x < right
+		if (x >= buttonX && x < buttonRight
         &&  y >= buttonY && y < buttonY + height
         ) {
 			return i;
 		}
 
-		right -= width;
+		buttonRight -= width + config.buttonGap;
 	}
 
 	return -1;
@@ -418,7 +418,7 @@ void WindowTitlebar::draw(SDL_Window* window, SDL_Renderer* renderer, const std:
         minimizeTexture
     };
 
-    float buttonRight = static_cast<float>(windowWidth);
+    float buttonRight = static_cast<float>(windowWidth) - config.rightGap;
 
     for (int i = 0; i < config.buttonCount; ++i) {
         SDL_Texture* texture = textures[i];
@@ -440,7 +440,7 @@ void WindowTitlebar::draw(SDL_Window* window, SDL_Renderer* renderer, const std:
 
         SDL_RenderTexture(renderer, texture, nullptr, &destination);
 
-        buttonRight -= width;
+        buttonRight -= width + config.buttonGap;
     }
 
 	if (config.showTitle && !title.empty()) {
