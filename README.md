@@ -21,6 +21,7 @@ Bundled plugins:
 - Yanagisawa PIC (.Pi .PIC .JPX)
 - RPG Maker XYZ
 - MSX Screen formats
+- Truevision TGA
 
 ## Building
 
@@ -54,3 +55,4 @@ plugins:
 - stb: stb_image
 - gif: giflib
 - qoi: qoi
+- tga: aseprite tga

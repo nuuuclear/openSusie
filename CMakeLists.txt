@@ -170,6 +170,7 @@ add_dependencies(openSusie
     openSusie_pic
     openSusie_xyz
     openSusie_msx
+    openSusie_tga
 )
 
 if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND OPENSUSIE_BUILD_32BIT_PLUGIN_HOST)

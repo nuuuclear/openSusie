@@ -7,6 +7,7 @@ set(openSusie_plugins
     pic
     xyz
     msx
+    tga
 )
 
 foreach(plugin IN LISTS openSusie_plugins)
